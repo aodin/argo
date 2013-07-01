@@ -30,7 +30,11 @@ var ImproperKey = errors.New("An improper key was given")
 // TODO another option is Create(id, elem)
 func (c *IntegerCollection) Create(elem []byte) (string, []byte, error) {
 	// Unpack the resource from the given byte array
-	clean := c.schema.Unmarshal(elem)
+	clean, unmarshalErr := c.schema.Unmarshal(elem)
+	if unmarshalErr != nil {
+		return "", nil, unmarshalErr
+	}
+	// TODO Aggregate errors?
 
 	// An "id" may be specified in the item to be created
 	// If the key did not exist, it will be handled by the type assertion
@@ -91,7 +95,11 @@ func (c *IntegerCollection) Update(key string, elem []byte) ([]byte, error) {
 		return nil, ImproperKey
 	}
 	// Unpack the resource from the given byte array
-	clean := c.schema.Unmarshal(elem)
+	clean, unmarshalErr := c.schema.Unmarshal(elem)
+	if unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
+	// TODO Aggregate errors?
 
 	// TODO replace the whole item or just the fields in the new elem?
 	// TODO Allow resources to be moved

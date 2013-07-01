@@ -6,23 +6,19 @@ import (
 
 func TestResource(t *testing.T) {
 	item := Resource("item",
-		Field("id"),
-		Field("name"),
+		Field("id", Integer{}),
+		Field("name", String{}),
 	)
-
 	if item.Name != "item" {
 		t.Errorf("Unexpected element name: %s\n", item.Name)
 	}
-
-	if len(item.attrs) != 2 {
-		t.Fatalf("Unexpected length of attributes:", len(item.attrs))
+	if len(item.fields) != 2 {
+		t.Fatalf("Unexpected length of attributes:", len(item.fields))
 	}
-
-	if item.attrs[0].Name != "id" {
-		t.Errorf("Unexpected attribute: %s\n", item.attrs[0].Name)
+	if item.fields[0].Name != "id" {
+		t.Errorf("Unexpected attribute: %s\n", item.fields[0].Name)
 	}
-	if item.attrs[1].Name != "name" {
-		t.Errorf("Unexpected attribute: %s\n", item.attrs[1].Name)
+	if item.fields[1].Name != "name" {
+		t.Errorf("Unexpected attribute: %s\n", item.fields[1].Name)
 	}
-
 }

@@ -22,8 +22,8 @@ func TestEndpoint(t *testing.T) {
 	}
 
 	item := Resource("item",
-		Field("id"),
-		Field("name"),
+		Field("id", Integer{}),
+		Field("name", String{Required: true}),
 	)
 	items := IntegerStore(item)
 	items.Create([]byte(`{"name":"Super Bass-O-Matic 1976"}`))
@@ -38,7 +38,10 @@ func TestEndpoint(t *testing.T) {
 // Create an example server and test methods against it
 func TestRestMethods(t *testing.T) {
 	// TODO Respect errors!
-	item := Resource("item", Field("id"), Field("name"))
+	item := Resource("item",
+		Field("id", Integer{}),
+		Field("name", String{Required: true}),
+	)
 	endpoint, _ := API("/api")
 	endpoint.Register("item", IntegerStore(item))
 
@@ -97,4 +100,6 @@ func TestRestMethods(t *testing.T) {
 	if name != "Super Bass-O-Matic 1976" {
 		t.Errorf("Unexpected name was returned: %s\n", name)
 	}
+
+	// TODO Test the required, max length, etc... type checks
 }

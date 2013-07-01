@@ -55,9 +55,9 @@ func (s String) Check(raw interface{}, exists bool) error {
 	return nil
 } 
 
-type TypeInterface interface {
+type TypeChecker interface {
 	// Ugly, but typesafe
-	Check(interface{}, bool) error
+	Check(interface{}, bool) []errors
 }
 
 
@@ -117,10 +117,10 @@ func Elem(name string, attrStructs ...*AttributeStruct) *ElementStruct {
 
 type AttributeStruct struct {
 	Name string
-	Type TypeInterface
+	Type TypeChecker
 }
 
-func Attr(attrName string, typeCheck TypeInterface) *AttributeStruct {
+func Attr(attrName string, typeCheck TypeChecker) *AttributeStruct {
 	return &AttributeStruct{Name: attrName, Type: typeCheck}
 }
 

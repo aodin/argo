@@ -8,14 +8,14 @@ import (
 func TestCollection(t *testing.T) {
 	// Example schema
 	item := Resource("item",
-		Field("id"),
-		Field("name"),
+		Field("id", Integer{}),
+		Field("name", String{Required: true}),
 	)
 	collection := IntegerStore(item)
 
 	// Create an item with a given id
 	colonBlow := map[string] interface{} {
-		"id": 2, // TODO should error is anything but int64/float64 key
+		"id": 2, // TODO should error if anything but int64/float64 key
 		"name": "Colon Blow",
 	}
 	colonBlowJSON, _ := json.Marshal(colonBlow)
