@@ -12,12 +12,14 @@ var item = argonaut.Elem("item",
 )
 
 func main() {
-
 	// Create an item and register the item schema
 	endpoint, apiErr := argonaut.API("/api")
 	if apiErr != nil {
 		panic("Could not create the specified API")
 	}
+
+	// Attach it to the handler
+	http.Handle(endpoint.BaseURL(), endpoint)
 
 	items := argonaut.IntegerStore(item)
 	items.Create([]byte(`{"name":"Super Bass-O-Matic 1976"}`))

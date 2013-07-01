@@ -47,7 +47,7 @@ func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
 	// Attempt to match the first path item to a Collection
 	collection, exists := e.registry[path[0]];
 	if !exists {
-		// Do not anything on the response or it will return 200, not 404
+		// Do not write to response or it will return 200, not 404
 		http.NotFound(w, r)
 		return
 	}
@@ -149,8 +149,14 @@ func (e *Endpoint) AvailableResources() []byte {
 	return available
 }
 
-func (e *Endpoint) Handle() func(http.ResponseWriter, *http.Request) {
-	return e.Route
+// Meet the requirements of the http.Handler interface.
+// Sole responsibility is to proxy to the approriate handler
+func (e *Endpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	e.Route(w, r)
+}
+
+func (e *Endpoint) BaseURL() string {
+	return e.baseUrl
 }
 
 func (e *Endpoint) Register(name string, c Collection) error {
@@ -186,7 +192,6 @@ func API(baseUrl string, collections ...Collection) (*Endpoint, error) {
 		registry: make(map[string] Collection),
 		resources: make(map[string] string),
 	}
-	// TODO create a mux for each resource
-	http.HandleFunc(baseUrl, e.Handle())
+
 	return e, nil
 }

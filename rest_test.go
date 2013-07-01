@@ -17,7 +17,7 @@ func TestEndpoint(t *testing.T) {
 		t.Errorf("Error while creating API: %s\n", apiErr.Error())
 	}
 	// A slash should have been appended
-	if endpoint.baseUrl != "/v1/" {
+	if endpoint.BaseURL() != "/v1/" {
 		t.Errorf("Unexpected endpoint base URL: %s\n", endpoint.baseUrl)
 	}
 
@@ -47,6 +47,7 @@ func TestRestMethods(t *testing.T) {
 	address := "http://localhost" + port
 
 	go func() {
+		http.Handle(endpoint.BaseURL(), endpoint)
 		http.ListenAndServe(port, nil)
 	}()
 
