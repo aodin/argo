@@ -21,9 +21,9 @@ func TestEndpoint(t *testing.T) {
 		t.Errorf("Unexpected endpoint base URL: %s\n", endpoint.baseUrl)
 	}
 
-	item := Elem("item",
-		Attr("id"),
-		Attr("name"),
+	item := Resource("item",
+		Field("id"),
+		Field("name"),
 	)
 	items := IntegerStore(item)
 	items.Create([]byte(`{"name":"Super Bass-O-Matic 1976"}`))
@@ -38,7 +38,7 @@ func TestEndpoint(t *testing.T) {
 // Create an example server and test methods against it
 func TestRestMethods(t *testing.T) {
 	// TODO Respect errors!
-	item := Elem("item", Attr("id"), Attr("name"))
+	item := Resource("item", Field("id"), Field("name"))
 	endpoint, _ := API("/api")
 	endpoint.Register("item", IntegerStore(item))
 

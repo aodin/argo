@@ -7,9 +7,9 @@ import (
 
 func TestCollection(t *testing.T) {
 	// Example schema
-	item := Elem("item",
-		Attr("id"),
-		Attr("name"),
+	item := Resource("item",
+		Field("id"),
+		Field("name"),
 	)
 	collection := IntegerStore(item)
 

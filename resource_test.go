@@ -4,11 +4,10 @@ import (
 	"testing"
 )
 
-func TestElement(t *testing.T) {
-
-	item := Elem("item",
-		Attr("id"),
-		Attr("name"),
+func TestResource(t *testing.T) {
+	item := Resource("item",
+		Field("id"),
+		Field("name"),
 	)
 
 	if item.Name != "item" {

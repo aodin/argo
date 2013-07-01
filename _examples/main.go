@@ -6,9 +6,9 @@ import (
 	"github.com/aodin/argonaut"
 )
 
-var item = argonaut.Elem("item",
-	argonaut.Attr("id"),
-	argonaut.Attr("name"),
+var item = argonaut.Resource("item",
+	argonaut.Field("id"),
+	argonaut.Field("name"),
 )
 
 func main() {

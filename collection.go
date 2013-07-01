@@ -17,19 +17,19 @@ type Collection interface {
 type IntegerCollection struct {
 	pkey int64
 	length int64
-	schema *ElementStruct
-	elements map[int64] map[string] interface {}
+	schema *ResourceStruct
+	resources map[int64] map[string] interface {}
 	// TODO default ordering
 }
 
-var DoesNotExist = errors.New("No element exists at this key")
-var DuplicateElement = errors.New("An element aready exists at this key")
+var DoesNotExist = errors.New("No resource exists at this key")
+var DuplicateResource = errors.New("A resource aready exists at this key")
 var IdMismatch = errors.New("Id of resource and id provided do not match")
 var ImproperKey = errors.New("An improper key was given")
 
 // TODO another option is Create(id, elem)
 func (c *IntegerCollection) Create(elem []byte) (string, []byte, error) {
-	// Unpack the element from the given byte array
+	// Unpack the resource from the given byte array
 	clean := c.schema.Unmarshal(elem)
 
 	// An "id" may be specified in the item to be created
@@ -47,12 +47,12 @@ func (c *IntegerCollection) Create(elem []byte) (string, []byte, error) {
 		c.pkey += 1
 		id = c.pkey
 
-		// Set the new id on the element
+		// Set the new id on the resource
 		clean["id"] = id
 	} else {
-		// Confirm that no element exists at the provided id
-		if _, exists := c.elements[id]; exists {
-			return fmt.Sprintf("%d", id), nil, DuplicateElement
+		// Confirm that no resource exists at the provided id
+		if _, exists := c.resources[id]; exists {
+			return fmt.Sprintf("%d", id), nil, DuplicateResource
 		}
 		// If the given key is greater than the auto-increment key, set the
 		// auto-increment key equal to the given key
@@ -61,10 +61,10 @@ func (c *IntegerCollection) Create(elem []byte) (string, []byte, error) {
 		if id > c.pkey {
 			c.pkey = id
 		}
-		// Update the clean element to use an int64 "id" attr
+		// Update the clean resource to use an int64 "id" attr
 		clean["id"] = id
 	}
-	c.elements[id] = clean
+	c.resources[id] = clean
 	c.length += 1
 
 	// Return the clean copy of the newly created item
@@ -78,7 +78,7 @@ func (c *IntegerCollection) Read(key string) ([]byte, error) {
 		return nil, ImproperKey
 	}
 
-	elem, exists := c.elements[id]
+	elem, exists := c.resources[id]
 	if !exists {
 		return nil, DoesNotExist
 	}
@@ -90,11 +90,11 @@ func (c *IntegerCollection) Update(key string, elem []byte) ([]byte, error) {
 	if keyErr != nil {
 		return nil, ImproperKey
 	}
-	// Unpack the element from the given byte array
+	// Unpack the resource from the given byte array
 	clean := c.schema.Unmarshal(elem)
 
 	// TODO replace the whole item or just the fields in the new elem?
-	// TODO Allow elements to be moved
+	// TODO Allow resources to be moved
 
 	// An "id" may be specified in the item to be created
 	// If the key did not exist, it will be handled by the type assertion
@@ -107,10 +107,10 @@ func (c *IntegerCollection) Update(key string, elem []byte) ([]byte, error) {
 		return nil, IdMismatch
 	}
 
-	if _, exists := c.elements[id]; !exists {
+	if _, exists := c.resources[id]; !exists {
 		return nil, DoesNotExist
 	}
-	c.elements[id] = clean
+	c.resources[id] = clean
 
 	// Return the clean copy of the updated item
 	return c.schema.Marshal(clean)
@@ -121,10 +121,10 @@ func (c *IntegerCollection) Delete(key string) error {
 	if keyErr != nil {
 		return ImproperKey
 	}
-	if _, exists := c.elements[id]; !exists {
+	if _, exists := c.resources[id]; !exists {
 		return DoesNotExist
 	}
-	delete(c.elements, id)
+	delete(c.resources, id)
 	c.length -= 1
 	return nil
 }
@@ -133,7 +133,7 @@ func (c *IntegerCollection) Delete(key string) error {
 func (c *IntegerCollection) List() []byte {
 	output := make([]map[string] interface{}, c.length)
 	count := 0
-	for _, elem := range c.elements {
+	for _, elem := range c.resources {
 		output[count] = elem
 		count += 1
 	}
@@ -144,8 +144,8 @@ func (c *IntegerCollection) List() []byte {
 	return listJSON
 }
 
-// TODO allow default elements - JSON or maps?
-func IntegerStore(schema *ElementStruct) *IntegerCollection {
-	elements := make(map[int64] map[string] interface {})
-	return &IntegerCollection{schema: schema, elements: elements}
+// TODO allow default resources - JSON or maps?
+func IntegerStore(schema *ResourceStruct) *IntegerCollection {
+	resources := make(map[int64] map[string] interface {})
+	return &IntegerCollection{schema: schema, resources: resources}
 } 
