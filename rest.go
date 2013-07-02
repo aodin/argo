@@ -22,9 +22,9 @@ var DuplicateCollection = errors.New("A collection with this name already exists
 var EmptyUrl = errors.New("API and Collections cannot have empty URLs")
 
 type Endpoint struct {
-	baseUrl string
-	registry map[string] Collection
-	resources map[string] string // map[Resource Name] URL
+	baseUrl   string
+	registry  map[string]Collection
+	resources map[string]string // map[Resource Name] URL
 }
 
 func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Attempt to match the first path item to a Collection
-	collection, exists := e.registry[path[0]];
+	collection, exists := e.registry[path[0]]
 	if !exists {
 		// Do not write to response or it will return 200, not 404
 		http.NotFound(w, r)
@@ -58,7 +58,7 @@ func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
 		key := path[1]
 		if r.Method == "POST" || r.Method == "PUT" {
 			var body []byte
-			body, readErr := ioutil.ReadAll(r.Body);
+			body, readErr := ioutil.ReadAll(r.Body)
 			// TODO Does it need to be closed?
 			r.Body.Close()
 			if readErr != nil {
@@ -117,7 +117,7 @@ func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
 	// TODO Use POST for full item update and PUT for partial?
 	if r.Method == "POST" || r.Method == "PUT" {
 		var body []byte
-		body, readErr := ioutil.ReadAll(r.Body);
+		body, readErr := ioutil.ReadAll(r.Body)
 		// TODO Does it need to be closed?
 		r.Body.Close()
 		if readErr != nil {
@@ -141,7 +141,7 @@ func (e *Endpoint) Route(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Endpoint) AvailableResources() []byte {
-	available, jsonErr := json.Marshal(e.resources);
+	available, jsonErr := json.Marshal(e.resources)
 	if jsonErr != nil {
 		// TODO Log an error
 		return nil
@@ -161,7 +161,7 @@ func (e *Endpoint) BaseURL() string {
 
 func (e *Endpoint) Register(name string, c Collection) error {
 	if _, exists := e.registry[name]; exists {
-		return DuplicateCollection 
+		return DuplicateCollection
 	}
 	e.registry[name] = c
 
@@ -180,7 +180,7 @@ func API(baseUrl string, collections ...Collection) (*Endpoint, error) {
 		return nil, EmptyUrl
 	}
 	// If the base url must start and end with a slash "/"
-	if baseUrl[len(baseUrl) - 1] != '/' {
+	if baseUrl[len(baseUrl)-1] != '/' {
 		baseUrl += "/"
 	}
 	if baseUrl[0] != '/' {
@@ -188,9 +188,9 @@ func API(baseUrl string, collections ...Collection) (*Endpoint, error) {
 	}
 
 	e := &Endpoint{
-		baseUrl: baseUrl,
-		registry: make(map[string] Collection),
-		resources: make(map[string] string),
+		baseUrl:   baseUrl,
+		registry:  make(map[string]Collection),
+		resources: make(map[string]string),
 	}
 
 	return e, nil

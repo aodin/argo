@@ -14,8 +14,8 @@ func TestCollection(t *testing.T) {
 	collection := IntegerStore(item)
 
 	// Create an item with a given id
-	colonBlow := map[string] interface{} {
-		"id": 2, // TODO should error if anything but int64/float64 key
+	colonBlow := map[string]interface{}{
+		"id":   2, // TODO should error if anything but int64/float64 key
 		"name": "Colon Blow",
 	}
 	colonBlowJSON, _ := json.Marshal(colonBlow)

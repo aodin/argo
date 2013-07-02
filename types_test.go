@@ -6,7 +6,7 @@ import (
 
 func TestTypeChecker(t *testing.T) {
 	// JSON unmarshal returns numbers as a float64
-	var intValue float64 = 10 
+	var intValue float64 = 10
 
 	// Check an optional integer
 	optionalInt := Integer{}

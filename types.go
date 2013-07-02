@@ -75,7 +75,7 @@ func (t Boolean) Check(raw interface{}, exists bool) []error {
 }
 
 type String struct {
-	Required bool
+	Required  bool
 	MaxLength int
 }
 

@@ -6,28 +6,28 @@ import (
 )
 
 type ResourceStruct struct {
-	Name string
+	Name   string
 	fields []*FieldStruct
 }
 
-func (e *ResourceStruct) Unmarshal(raw []byte) (map[string] interface {}, error) {
+func (e *ResourceStruct) Unmarshal(raw []byte) (map[string]interface{}, error) {
 	// Dump the entire JSON into a empty map
-	dirty := make(map[string] interface {})
+	dirty := make(map[string]interface{})
 	unmarshalErr := json.Unmarshal(raw, &dirty)
 
-	clean := make(map[string] interface {})
+	clean := make(map[string]interface{})
 
 	if unmarshalErr != nil {
 		return clean, unmarshalErr
 	}
 
 	// Aggregate errors by the field Name
-	fieldErrors := make(map[string] []string)
+	fieldErrors := make(map[string][]string)
 
 	// Use the type checkers to clean the given map
 	for _, field := range e.fields {
 		fieldValue, exists := dirty[field.Name]
-		typeErrors := field.Type.Check(fieldValue, exists);
+		typeErrors := field.Type.Check(fieldValue, exists)
 		// TODO Are all errors fatal?
 		if typeErrors == nil {
 			clean[field.Name] = fieldValue
@@ -52,7 +52,7 @@ func (e *ResourceStruct) Unmarshal(raw []byte) (map[string] interface {}, error)
 	return clean, nil
 }
 
-func (e *ResourceStruct) Marshal(elem interface {}) ([]byte, error) {
+func (e *ResourceStruct) Marshal(elem interface{}) ([]byte, error) {
 	return json.Marshal(elem)
 }
 

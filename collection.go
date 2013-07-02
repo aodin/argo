@@ -15,10 +15,10 @@ type Collection interface {
 }
 
 type IntegerCollection struct {
-	pkey int64
-	length int64
-	schema *ResourceStruct
-	resources map[int64] map[string] interface {}
+	pkey      int64
+	length    int64
+	schema    *ResourceStruct
+	resources map[int64]map[string]interface{}
 	// TODO default ordering
 }
 
@@ -139,7 +139,7 @@ func (c *IntegerCollection) Delete(key string) error {
 
 // TODO return an error?
 func (c *IntegerCollection) List() []byte {
-	output := make([]map[string] interface{}, c.length)
+	output := make([]map[string]interface{}, c.length)
 	count := 0
 	for _, elem := range c.resources {
 		output[count] = elem
@@ -154,6 +154,6 @@ func (c *IntegerCollection) List() []byte {
 
 // TODO allow default resources - JSON or maps?
 func IntegerStore(schema *ResourceStruct) *IntegerCollection {
-	resources := make(map[int64] map[string] interface {})
+	resources := make(map[int64]map[string]interface{})
 	return &IntegerCollection{schema: schema, resources: resources}
-} 
+}

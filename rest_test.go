@@ -81,8 +81,8 @@ func TestRestMethods(t *testing.T) {
 		t.Errorf("Unexpected error during POST response: %s\n", readErr.Error())
 	}
 
-	// TODO Deep comparison of JSON? 
-	item1 := make(map[string] interface{})
+	// TODO Deep comparison of JSON?
+	item1 := make(map[string]interface{})
 	json.Unmarshal(body, &item1)
 
 	id, ok := item1["id"].(float64)
