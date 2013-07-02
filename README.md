@@ -43,14 +43,14 @@ var item = Resource("item",
 )
 ```
 
-This schema is used to create a collection. For now, there's an example in-memory key-value store. More to come.
+This schema is used to create a collection. For now, there's an example in-memory key-value store called `IntegerStore`. More to come.
 
 ```go
 items := IntegerStore(item)
 resourceErr := endpoint.Register("item", items)
 ```
 
-This will expose standard REST methods at the URL `/api/items/`.
+This will expose standard REST methods at the URL `/api/item/`.
 
 A full example looks like:
 
