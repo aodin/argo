@@ -13,12 +13,19 @@ type TypeChecker interface {
 	Check(interface{}, bool) []error
 }
 
+type Any struct {}
+
+// Allow any type through
+func (t Any) Check(raw interface{}, exists bool) []error {
+	return nil
+}
+
 type Integer struct {
 	Required bool
 }
 
 func (t Integer) Check(raw interface{}, exists bool) []error {
-	if !exists && !t.Required {
+	if !t.Required && (!exists || raw == nil) {
 		// No need to check type, it doesn't exist and isn't required
 		return nil
 	}
@@ -34,12 +41,12 @@ func (t Integer) Check(raw interface{}, exists bool) []error {
 	return nil
 }
 
-type Float struct {
+type Number struct {
 	Required bool
 }
 
-func (t Float) Check(raw interface{}, exists bool) []error {
-	if !exists && !t.Required {
+func (t Number) Check(raw interface{}, exists bool) []error {
+	if !t.Required && (!exists || raw == nil) {
 		// No need to check type, it doesn't exist and isn't required
 		return nil
 	}
@@ -49,7 +56,7 @@ func (t Float) Check(raw interface{}, exists bool) []error {
 	// All JSON numbers are parsed as float64
 	_, ok := raw.(float64)
 	if !ok {
-		return []error{errors.New("Field must be a float")}
+		return []error{errors.New("Field must be a number")}
 	}
 	return nil
 }
@@ -59,14 +66,13 @@ type Boolean struct {
 }
 
 func (t Boolean) Check(raw interface{}, exists bool) []error {
-	if !exists && !t.Required {
+	if !t.Required && (!exists || raw == nil) {
 		// No need to check type, it doesn't exist and isn't required
 		return nil
 	}
 	if t.Required && !exists {
 		return []error{errors.New("Field is required")}
 	}
-	// All JSON numbers are parsed as float64
 	_, ok := raw.(bool)
 	if !ok {
 		return []error{errors.New("Field must be a boolean")}
@@ -80,7 +86,7 @@ type String struct {
 }
 
 func (t String) Check(raw interface{}, exists bool) []error {
-	if !exists && !t.Required {
+	if !t.Required && (!exists || raw == nil) {
 		// No need to check type, it doesn't exist and isn't required
 		return nil
 	}
@@ -88,7 +94,6 @@ func (t String) Check(raw interface{}, exists bool) []error {
 		return []error{errors.New("Field is required")}
 	}
 
-	// All JSON numbers are parsed as float64
 	value, ok := raw.(string)
 	if !ok {
 		return []error{errors.New("Field must be a string")}
@@ -101,3 +106,38 @@ func (t String) Check(raw interface{}, exists bool) []error {
 	}
 	return nil
 }
+
+type Array struct {
+	Type TypeChecker
+}
+
+func (t Array) Check(raw interface{}, exists bool) []error {
+	if !exists {
+		return nil
+	}
+	// All JSON Arrays are of type []interface{}
+	elements, ok := raw.([]interface{})
+	if !ok {
+		return []error{errors.New("Field must be an array")}
+	}
+
+	// If a type was given, check each element
+	if t.Type != nil {
+		elemTypeErrors := make([]error, 0)
+		for _, elem := range elements {
+			// TODO aggregate errors
+			elemErrors := t.Type.Check(elem, true)
+			if elemErrors != nil {
+				for _, elemErr := range elemErrors {
+					elemTypeErrors = append(elemTypeErrors, elemErr)
+				} 
+			}
+		}
+		if len(elemTypeErrors) != 0 {
+			return elemTypeErrors
+		}
+	}
+	return nil
+}
+
+// TODO allow resources to be infinitely nested?

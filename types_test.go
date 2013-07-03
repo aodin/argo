@@ -14,6 +14,11 @@ func TestTypeChecker(t *testing.T) {
 	if typeErrors != nil {
 		t.Error("Errors during optional integer check:", typeErrors)
 	}
+	// nil is an accetable value if the type is optional (null in JSON)
+	typeErrors = optionalInt.Check(nil, true)
+	if typeErrors != nil {
+		t.Error("Errors during optional integer check:", typeErrors)
+	}
 	typeErrors = optionalInt.Check(nil, false)
 	if typeErrors != nil {
 		t.Error("Errors during optional integer check:", typeErrors)
@@ -118,4 +123,36 @@ func TestTypeChecker(t *testing.T) {
 	if typeErrors == nil {
 		t.Error("An error was expected during an required boolean check but did not occur")
 	}
+
+	// Check a wildcard Array type
+	wildcardArray := Array{}
+	typeErrors = wildcardArray.Check([]interface{}{1, "a"}, true)
+	if typeErrors != nil {
+		t.Error("Errors during a wildcard Array check:", typeErrors)
+	}
+	typeErrors = wildcardArray.Check(nil, false)
+	if typeErrors != nil {
+		t.Error("Errors during a wildcard Array check:", typeErrors)
+	}
+	typeErrors = wildcardArray.Check(10, true)
+	if typeErrors == nil {
+		t.Error("An error was expected during a wildcard Array check but did not occur")
+	}
+
+	// Check an Array of strings
+	stringArray := Array{Type: String{}}
+	typeErrors = stringArray.Check([]interface{}{"a", "b"}, true)
+	if typeErrors != nil {
+		t.Error("Errors during a String Array check:", typeErrors)
+	}
+	typeErrors = stringArray.Check(nil, false)
+	if typeErrors != nil {
+		t.Error("Errors during a String Array check:", typeErrors)
+	}
+	typeErrors = stringArray.Check([]interface{}{1.0, 6.4}, true)
+	if typeErrors == nil {
+		t.Error("An error was expected during a String Array check but did not occur")
+	}
+
+
 }
