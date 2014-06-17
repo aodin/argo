@@ -1,24 +1,22 @@
-package argonaut
+package argo
 
 import (
+	"net/url"
 	"testing"
 )
 
+// Create an example resource
+type exampleResource []string
+
+func (r exampleResource) Get(parameters url.Values) Response {
+	return Response{
+		StatusCode:  200,
+		ContentType: "application/json",
+		Results:     r,
+	}
+}
+
 func TestResource(t *testing.T) {
-	item := Resource("item",
-		Field("id", Integer{}),
-		Field("name", String{}),
-	)
-	if item.Name != "item" {
-		t.Errorf("Unexpected element name: %s\n", item.Name)
-	}
-	if len(item.fields) != 2 {
-		t.Fatalf("Unexpected length of attributes: %d\n", len(item.fields))
-	}
-	if item.fields[0].Name != "id" {
-		t.Errorf("Unexpected attribute: %s\n", item.fields[0].Name)
-	}
-	if item.fields[1].Name != "name" {
-		t.Errorf("Unexpected attribute: %s\n", item.fields[1].Name)
-	}
+	e := exampleResource{"hello", "goodbye"}
+	var _ Resource = e
 }
