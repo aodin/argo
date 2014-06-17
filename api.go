@@ -56,10 +56,13 @@ func (a *API) Add(name string, resource Resource) error {
 }
 
 func New(c config.Config, r *httprouter.Router, b string) *API {
-	return &API{
+	api := &API{
 		baseURL:   b,
 		resources: make(Resources),
 		router:    r,
 		config:    c,
 	}
+	r.GET(fmt.Sprintf("%s/", b), api.Resources)
+	r.GET(fmt.Sprintf("%s/:resource/", b), api.Get)
+	return api
 }

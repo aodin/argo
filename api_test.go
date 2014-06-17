@@ -3,7 +3,6 @@ package argo
 import (
 	"github.com/aodin/volta/config"
 	"github.com/julienschmidt/httprouter"
-	"net/http"
 	"testing"
 )
 
