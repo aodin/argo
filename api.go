@@ -41,8 +41,12 @@ func (a *API) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 	}
 
 	// TODO Set status code
+	if response.StatusCode >= 400 {
+		http.Error(w, "Bad Request", response.StatusCode)
+		return
+	}
 
-	b, _ := json.MarshalIndent(response, "", "    ")
+	b, _ := json.MarshalIndent(response.Message, "", "    ")
 	w.Write(b)
 }
 

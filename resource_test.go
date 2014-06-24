@@ -12,7 +12,7 @@ func (r exampleResource) Get(parameters url.Values) Response {
 	return Response{
 		StatusCode:  200,
 		ContentType: "application/json",
-		Results:     r,
+		Message:     r,
 	}
 }
 
