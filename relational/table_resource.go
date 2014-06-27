@@ -145,14 +145,14 @@ func (t *Resource) Ordering(raw string) (ordering []aspect.Orderable) {
 // ResourceFromTable builds an argo resource from a aspect table element.
 func ResourceFromTable(t *aspect.TableElem) (r *Resource) {
 	r = &Resource{}
-	// Set the name
+	// Set the table properties
 	r.Name = t.Name
+	r.table = t
 	r.pk = t.PrimaryKey()
 
-	// Get the columns of the table
-	columns := t.Columns()
 
 	// Every column should be sortable by default
+	columns := t.Columns()
 	columnNames := make([]string, len(columns))
 	for i, column := range columns {
 		columnNames[i] = column.Name()
@@ -162,6 +162,17 @@ func ResourceFromTable(t *aspect.TableElem) (r *Resource) {
 	// Set defaults
 	r.Limit = 100
 	r.Radius = 200
+
+	// TODO Check the actual columns
+	if r.sortable.Has("location") && r.sortable.Has("latitude") && r.sortable.Has("longitude") {
+		r.locationFields = []LocationField{
+			{
+				latitude: "latitude",
+				longitude: "longitude",
+				location: "location",
+			},
+		}
+	}
 
 	// TODO Remove the location columns so they aren't parsed as floats
 	return r
