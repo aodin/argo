@@ -1,72 +1,96 @@
 package argo
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/aodin/volta/config"
-	"github.com/julienschmidt/httprouter"
 	"net/http"
+	"strings"
 )
 
 type API struct {
-	baseURL   string
-	resources Resources
-	router    *httprouter.Router
-	config    config.Config
+	// Create a single node for node
+	resources map[string]Resource
+	routes    *node
 }
 
-// Resources lists the available resources
-func (a *API) Resources(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-	b, _ := json.MarshalIndent(a.resources.URLs(a.baseURL), "", "    ")
-	w.Write(b)
+// Add will add the given resource at the given name
+func (api *API) Add(name string, resource Resource, keys ...string) error {
+	if _, exists := api.resources[name]; exists {
+		return fmt.Errorf("argo: resource %s already exists", name)
+	}
+	api.resources[name] = resource
+
+	// Build the routes from the primary key(s)
+	pks := make([]string, len(keys))
+	for i, key := range keys {
+		pks[i] = fmt.Sprintf(":%s", key)
+	}
+	pk := strings.Join(pks, "/")
+
+	// Also add the routes
+	api.routes.addRoute(fmt.Sprintf("/%s", name), resource)
+	api.routes.addRoute(fmt.Sprintf("/%s/", name), resource)
+	api.routes.addRoute(fmt.Sprintf("/%s/%s", name, pk), resource)
+	api.routes.addRoute(fmt.Sprintf("/%s/%s/", name, pk), resource)
+
+	return nil
 }
 
-// Get will GET the resource with the requested name
-func (a *API) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Determine which resource was requested
-	name := ps.ByName("resource")
-	resource, exists := a.resources[name]
-	if !exists {
+func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Parse the API parameters and build the request object
+	resource, params, _ := api.routes.getValue(r.URL.Path)
+	if resource == nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Send the query parameters to the resource
-	response := resource.Get(r.URL.Query())
+	request := &Request{Request: r, Params: params}
 
-	// Set the content type
-	if response.ContentType != "" {
-		w.Header().Set("Content-Type", response.ContentType)
+	var response Response
+	var err *Error
+
+	// If there are no parameters
+	if len(params) == 0 {
+		switch r.Method {
+		case "GET":
+			response, err = resource.List(request)
+		case "POST":
+			response, err = resource.Post(request)
+		default:
+			http.Error(w, fmt.Sprintf("unsupported method: %s", r.Method), 400)
+			return
+		}
+	} else {
+		switch r.Method {
+		case "GET":
+			response, err = resource.Get(request)
+		case "PATCH":
+			response, err = resource.Patch(request)
+		case "DELETE":
+			response, err = resource.Delete(request)
+		default:
+			http.Error(w, fmt.Sprintf("unsupported method: %s", r.Method), 400)
+			return
+		}
 	}
-
-	// TODO Set status code
-	if response.StatusCode >= 400 {
-		http.Error(w, "Bad Request", response.StatusCode)
+	if err != nil {
+		http.Error(w, err.Error(), err.Code())
 		return
 	}
-
-	b, _ := json.MarshalIndent(response.Message, "", "    ")
-	w.Write(b)
-}
-
-// Add will add the given resource at the given name
-func (a *API) Add(name string, resource Resource) error {
-	if _, exists := a.resources[name]; exists {
-		return fmt.Errorf("Resource %s already exists", name)
+	if response == nil {
+		// Set 204 no content
+		w.WriteHeader(204)
+		return
 	}
-	a.resources[name] = resource
-	return nil
+	// Always set the media type
+	encoder := resource.Encoder()
+	w.Header().Set("Content-Type", encoder.MediaType())
+	w.Write(encoder.Encode(response))
 }
 
-func New(c config.Config, r *httprouter.Router, b string) *API {
+func New() *API {
 	api := &API{
-		baseURL:   b,
-		resources: make(Resources),
-		router:    r,
-		config:    c,
+		resources: make(map[string]Resource),
+		routes:    &node{},
 	}
-	r.GET(fmt.Sprintf("%s/", b), api.Resources)
-	r.GET(fmt.Sprintf("%s/:resource/", b), api.Get)
 	return api
 }
