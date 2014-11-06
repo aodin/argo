@@ -6,20 +6,46 @@ import (
 	"strings"
 )
 
+type method string
+
+const (
+	GET    method = "GET"
+	POST   method = "POST"
+	PUT    method = "PUT"
+	PATCH  method = "PATCH"
+	DELETE method = "DELETE"
+)
+
 type API struct {
-	// Create a single node for node
-	resources map[string]Resource
+	prefix    string
+	resources map[string]Rest
 	routes    *node
 }
 
+func (api *API) SetPrefix(prefix string) *API {
+	// If empty, then set to slash
+	if prefix == "" {
+		prefix = "/"
+	} else if prefix[0] != '/' {
+		prefix = "/" + prefix
+	}
+	api.prefix = prefix
+	return api
+}
+
 // Add will add the given resource at the given name
-func (api *API) Add(name string, resource Resource, keys ...string) error {
+func (api *API) Add(resource *ResourceSQL) error {
+	name := resource.Name
 	if _, exists := api.resources[name]; exists {
-		return fmt.Errorf("argo: resource %s already exists", name)
+		return fmt.Errorf(
+			"argo: resource %s already exists",
+			name,
+		)
 	}
 	api.resources[name] = resource
 
 	// Build the routes from the primary key(s)
+	keys := resource.table.PrimaryKey()
 	pks := make([]string, len(keys))
 	for i, key := range keys {
 		pks[i] = fmt.Sprintf(":%s", key)
@@ -27,11 +53,11 @@ func (api *API) Add(name string, resource Resource, keys ...string) error {
 	pk := strings.Join(pks, "/")
 
 	// Also add the routes
-	api.routes.addRoute(fmt.Sprintf("/%s", name), resource)
-	api.routes.addRoute(fmt.Sprintf("/%s/", name), resource)
-	api.routes.addRoute(fmt.Sprintf("/%s/%s", name, pk), resource)
-	api.routes.addRoute(fmt.Sprintf("/%s/%s/", name, pk), resource)
-
+	p := api.prefix
+	api.routes.addRoute(fmt.Sprintf("%s%s", p, name), resource)
+	api.routes.addRoute(fmt.Sprintf("%s%s/", p, name), resource)
+	api.routes.addRoute(fmt.Sprintf("%s%s/%s", p, name, pk), resource)
+	api.routes.addRoute(fmt.Sprintf("%s%s/%s/", p, name, pk), resource)
 	return nil
 }
 
@@ -49,26 +75,27 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err *Error
 
 	// If there are no parameters
+	method := method(r.Method)
 	if len(params) == 0 {
-		switch r.Method {
-		case "GET":
+		switch method {
+		case GET:
 			response, err = resource.List(request)
-		case "POST":
+		case POST:
 			response, err = resource.Post(request)
 		default:
-			http.Error(w, fmt.Sprintf("unsupported method: %s", r.Method), 400)
+			http.Error(w, fmt.Sprintf("unsupported method: %s", method), 400)
 			return
 		}
 	} else {
-		switch r.Method {
-		case "GET":
+		switch method {
+		case GET:
 			response, err = resource.Get(request)
-		case "PATCH":
+		case PATCH:
 			response, err = resource.Patch(request)
-		case "DELETE":
+		case DELETE:
 			response, err = resource.Delete(request)
 		default:
-			http.Error(w, fmt.Sprintf("unsupported method: %s", r.Method), 400)
+			http.Error(w, fmt.Sprintf("unsupported method: %s", method), 400)
 			return
 		}
 	}
@@ -89,7 +116,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func New() *API {
 	api := &API{
-		resources: make(map[string]Resource),
+		resources: make(map[string]Rest),
 		routes:    &node{},
 	}
 	return api
