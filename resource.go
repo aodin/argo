@@ -17,8 +17,14 @@ type ResourceSQL struct {
 	encoder Encoder
 	conn    sql.Connection
 	table   *sql.TableElem
+	selects Columns
+	inserts Columns
 
-	// TODO Whitelist columns that will be queried
+	// Includes
+	listIncludes   []IncludeElem
+	detailIncludes []IncludeElem
+
+	// TODO save pk columns
 	// TODO Unique and foreign keys that must be checked
 }
 
@@ -26,7 +32,7 @@ func (c *ResourceSQL) Validate(values sql.Values) *APIError {
 	// Create an empty error scaffold
 	err := NewError(400)
 	for key, value := range values {
-		column, exists := c.table.C[key]
+		column, exists := c.inserts[key]
 		if !exists {
 			err.SetField(key, "does not exist")
 			continue
@@ -45,7 +51,7 @@ func (c *ResourceSQL) Validate(values sql.Values) *APIError {
 }
 
 func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
-	stmt := c.table.Select()
+	stmt := sql.Select(c.selects)
 	results := make([]sql.Values, 0)
 	if err := c.conn.QueryAll(stmt, &results); err != nil {
 		panic(fmt.Sprintf(
@@ -78,7 +84,7 @@ func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
 	// TODO only one pk for now
 	key := c.table.PrimaryKey()[0]
 
-	stmt := postgres.Insert(c.table).Returning(c.table.C[key]).Values(values)
+	stmt := postgres.Insert(c.inserts).Returning(c.table.C[key]).Values(values)
 	if stmtErr := stmt.Error(); stmtErr != nil {
 		return nil, MetaError(400, stmtErr.Error())
 	}
@@ -92,8 +98,8 @@ func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
 		))
 	}
 
-	// Get the object back
-	selectStmt := c.table.Select().Where(c.table.C[key].Equals(pk))
+	// Send the created resource back
+	selectStmt := sql.Select(c.selects).Where(c.table.C[key].Equals(pk))
 
 	// If we get ErrNoResult then something is fucked
 	result := sql.Values{}
@@ -111,21 +117,35 @@ func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
 func (c *ResourceSQL) Get(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
-	pkKey := c.table.PrimaryKey()[0]
-	pkValue := r.Params.ByName(pkKey)
+	key := c.table.PrimaryKey()[0]
+	dirtyPK := r.Params.ByName(key)
 
-	stmt := c.table.Select().Where(c.table.C[pkKey].Equals(pkValue))
+	// Validate the primary key value TODO multiple pk values
+	cleanPK, err := c.table.C[key].Type().Validate(dirtyPK)
+	if err != nil {
+		apiErr := NewError(400)
+		apiErr.SetField(key, err.Error())
+		return nil, apiErr
+	}
+
+	stmt := sql.Select(c.selects).Where(c.table.C[key].Equals(cleanPK))
 	result := sql.Values{}
-	err := c.conn.QueryOne(stmt, result)
-	if err == sql.ErrNoResult {
-		return nil, MetaError(404, "no resource with %s %s", pkKey, pkValue)
-	} else if err != nil {
+	dbErr := c.conn.QueryOne(stmt, result)
+	if dbErr == sql.ErrNoResult {
+		return nil, MetaError(404, "no resource with %s %s", key, dirtyPK)
+	} else if dbErr != nil {
 		panic(fmt.Sprintf(
 			"argo: could not query one in sql resource get (%s): %s",
 			stmt,
-			err,
+			dbErr,
 		))
 	}
+
+	// Add the includes
+	// for _, include := range c.detailIncludes {
+
+	// }
+
 	fixValues(result)
 	return result, nil
 }
@@ -133,29 +153,36 @@ func (c *ResourceSQL) Get(r *Request) (Response, *APIError) {
 func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
-	pkKey := c.table.PrimaryKey()[0]
-	pkValue := r.Params.ByName(pkKey)
+	key := c.table.PrimaryKey()[0]
+	dirtyPK := r.Params.ByName(key)
 
-	// TODO cast to id type?
-
-	values, decodeErr := c.encoder.Decode(r.Body)
-	if decodeErr != nil {
-		return nil, decodeErr
+	// Validate the primary key value TODO multiple pk values
+	cleanPK, err := c.table.C[key].Type().Validate(dirtyPK)
+	if err != nil {
+		apiErr := NewError(400)
+		apiErr.SetField(key, err.Error())
+		return nil, apiErr
 	}
 
-	// Confirm all fields exist before posting
+	// Validate all fields
+	values, apiErr := c.encoder.Decode(r.Body)
+	if apiErr != nil {
+		return nil, apiErr
+	}
+	if apiErr := c.Validate(values); apiErr != nil {
+		return nil, apiErr
+	}
 
 	// Check unique fields - case insensitive if string?
 	stmt := c.table.Update().Values(values).Where(
-		c.table.C[pkKey].Equals(pkValue),
+		c.table.C[key].Equals(cleanPK),
 	)
 	if stmtErr := stmt.Error(); stmtErr != nil {
 		return nil, MetaError(400, stmtErr.Error())
 	}
 
-	// TODO Return the whole object (same as a GET?)
-
-	result, err := c.conn.Execute(stmt)
+	// Perform the UPDATE
+	changes, err := c.conn.Execute(stmt)
 	if err != nil {
 		panic(fmt.Sprintf(
 			"argo: could not execute sql resource patch (%s): %s",
@@ -165,7 +192,7 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 	}
 
 	// If no rows were affected, then no row exists at this id
-	rows, err := result.RowsAffected()
+	rows, err := changes.RowsAffected()
 	if err != nil {
 		panic(fmt.Sprintf(
 			"argo: unsupported RowsAffected in sql resource patch %s",
@@ -173,20 +200,43 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 		))
 	}
 	if rows == 0 {
-		return nil, MetaError(404, "No resource with %s %s", pkKey, pkValue)
+		return nil, MetaError(404, "No resource with %s %s", key, dirtyPK)
 	}
-	return values, nil
+
+	// Send the created resource back
+	selectStmt := sql.Select(c.selects).Where(c.table.C[key].Equals(cleanPK))
+
+	// If we get ErrNoResult then something is fucked
+	result := sql.Values{}
+	if dbErr := c.conn.QueryOne(selectStmt, result); dbErr != nil {
+		panic(fmt.Sprintf(
+			"argo: could not query one in sql resource patch (%s): %s",
+			selectStmt,
+			dbErr,
+		))
+	}
+
+	// TODO includes?
+
+	fixValues(result)
+	return result, nil
 }
 
 func (c *ResourceSQL) Delete(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
-	pkKey := c.table.PrimaryKey()[0]
-	pkValue := r.Params.ByName(pkKey)
+	key := c.table.PrimaryKey()[0]
+	dirtyPK := r.Params.ByName(key)
 
-	// TODO cast to id type?
+	// Validate the primary key value TODO multiple pk values
+	cleanPK, err := c.table.C[key].Type().Validate(dirtyPK)
+	if err != nil {
+		apiErr := NewError(400)
+		apiErr.SetField(key, err.Error())
+		return nil, apiErr
+	}
 
-	stmt := c.table.Delete().Where(c.table.C[pkKey].Equals(pkValue))
+	stmt := c.table.Delete().Where(c.table.C[key].Equals(cleanPK))
 	result, err := c.conn.Execute(stmt)
 	if err != nil {
 		panic(fmt.Sprintf(
@@ -205,7 +255,7 @@ func (c *ResourceSQL) Delete(r *Request) (Response, *APIError) {
 		))
 	}
 	if rows == 0 {
-		return nil, MetaError(404, "No resource with %s %s", pkKey, pkValue)
+		return nil, MetaError(404, "No resource with %s %s", key, dirtyPK)
 	}
 	return nil, nil
 }
@@ -247,7 +297,18 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 		encoder: JSONEncoder{},
 		conn:    c,
 		table:   t.table, // the parameter table is argo.TableElem
+		selects: ColumnSet(t.table.Columns()...),
+		inserts: ColumnSet(t.table.Columns()...),
 	}
+
+	// Remove the primary key column(s) from the directly inserted columns
+	// TODO Allow this behavior to be toggled
+	for _, pk := range t.table.PrimaryKey() {
+		if err := resource.inserts.Remove(pk); err != nil {
+			panic(err)
+		}
+	}
+
 	for _, field := range fields {
 		if err := field.Modify(resource); err != nil {
 			panic(fmt.Sprintf(

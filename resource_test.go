@@ -3,6 +3,7 @@ package argo
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -42,6 +43,15 @@ func (cb ClosingBuffer) Close() (err error) {
 func mockRequest(body []byte) *Request {
 	return &Request{
 		Request: &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
+	}
+}
+
+func mockRequestID(body []byte, id interface{}) *Request {
+	return &Request{
+		Request: &http.Request{
+			Body: ClosingBuffer{bytes.NewBuffer(body)},
+		},
+		Params: Params{{Key: "id", Value: fmt.Sprintf("%d", id)}},
 	}
 }
 
@@ -90,7 +100,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 	require.Equal(t, true, ok)
 	assert.Equal(len(results), 0)
 
-	// POST valid
+	// POST - valid
 	admin := user{Name: "admin", Age: 57, IsActive: true, Password: "haX0r"}
 	b, err := json.Marshal(admin)
 	require.Nil(t, err)
@@ -106,16 +116,103 @@ func TestSimpleResourceSQL(t *testing.T) {
 	assert.Equal(admin.Password, result["password"])
 	assert.Equal(true, result["created"].(time.Time).Before(time.Now()))
 
-	// POST error
-	// Malformed json
+	// POST - include primary key
+	client := user{ID: 2, Name: "client"}
+	b, err = json.Marshal(client)
+	require.Nil(t, err)
+	_, errAPI = users.Post(mockRequest(b))
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// POST - malformed json
 	_, errAPI = users.Post(mockRequest([]byte(`{fsfds`)))
-	assert.NotNil(errAPI.Meta)
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
 
-	// Extra fields
+	// POST - extra fields
 	_, errAPI = users.Post(mockRequest([]byte(`{"extra":"yup"}`)))
-	assert.NotNil(errAPI.Meta)
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["extra"])
 
-	// TODO GET - valid
+	// GET - valid
+	uid := result["id"].(int64)
+	response, errAPI = users.Get(mockRequestID(nil, uid))
+	assert.Nil(errAPI)
+	result, ok = response.(sql.Values)
+	require.Equal(t, true, ok)
+	assert.Equal(uid, result["id"])
 
-	// TODO GET - invalid id
+	// GET - missing id
+	response, errAPI = users.Get(mockRequestID(nil, 0))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(404, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
+
+	// GET - invalid id
+	response, errAPI = users.Get(mockRequestID(nil, "whatever"))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// PATCH - missing id (data must be valid)
+	// response, errAPI = users.Patch(mockRequestID(nil, 0))
+	// assert.Equal(true, errAPI.Exists())
+	// assert.Equal(404, errAPI.code)
+	// assert.Equal(1, len(errAPI.Meta))
+
+	// PATCH - invalid id
+	response, errAPI = users.Patch(mockRequestID(nil, "whatever"))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// PATCH - malformed JSON
+	_, errAPI = users.Patch(mockRequestID([]byte(`{fsfds`), uid))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
+
+	// PATCH - extra fields
+	_, errAPI = users.Patch(mockRequestID([]byte(`{"extra":"yup"}`), uid))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["extra"])
+
+	// TODO PATCH - duplicates
+
+	// TODO PATCH - id
+	_, errAPI = users.Patch(mockRequestID([]byte(`{"id":"3"}`), uid))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// PATCH - valid
+	response, errAPI = users.Patch(mockRequestID([]byte(`{"name":"Q"}`), uid))
+	assert.Nil(errAPI)
+	result, ok = response.(sql.Values)
+	require.Equal(t, true, ok)
+	assert.Equal(uid, result["id"])
+	assert.Equal("Q", result["name"])
+	assert.Equal(admin.Age, result["age"])
+	assert.Equal(admin.IsActive, result["is_active"])
+	assert.Equal(admin.Password, result["password"])
+
+	// DELETE - invalid id
+	response, errAPI = users.Delete(mockRequestID(nil, "whatever"))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// DELETE - missing id
+	response, errAPI = users.Delete(mockRequestID(nil, 0))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(404, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
+
+	// DELETE - valid id
+	response, errAPI = users.Delete(mockRequestID(nil, uid))
+	assert.Nil(errAPI)
+	assert.Nil(response)
 }
