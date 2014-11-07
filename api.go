@@ -33,7 +33,7 @@ func (api *API) SetPrefix(prefix string) *API {
 	return api
 }
 
-// Add will add the given resource at the given name
+// Add adds the resource to the API using its name
 func (api *API) Add(resource *ResourceSQL) error {
 	name := resource.Name
 	if _, exists := api.resources[name]; exists {
@@ -69,10 +69,14 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine the encoder type
+	// TODO this could be done with routes / headers / auth
+	encoder := resource.Encoder()
+
 	request := &Request{Request: r, Params: params}
 
 	var response Response
-	var err *Error
+	var err *APIError
 
 	// If there are no parameters
 	method := method(r.Method)
@@ -83,8 +87,11 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case POST:
 			response, err = resource.Post(request)
 		default:
-			http.Error(w, fmt.Sprintf("unsupported method: %s", method), 400)
-			return
+			err = MetaError(
+				400,
+				"unsupported collection method: %s",
+				method,
+			)
 		}
 	} else {
 		switch method {
@@ -95,12 +102,15 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case DELETE:
 			response, err = resource.Delete(request)
 		default:
-			http.Error(w, fmt.Sprintf("unsupported method: %s", method), 400)
-			return
+			err = MetaError(
+				400,
+				"unsupported item method: %s",
+				method,
+			)
 		}
 	}
 	if err != nil {
-		http.Error(w, err.Error(), err.Code())
+		err.Write(w, encoder)
 		return
 	}
 	if response == nil {
@@ -109,7 +119,6 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Always set the media type
-	encoder := resource.Encoder()
 	w.Header().Set("Content-Type", encoder.MediaType())
 	w.Write(encoder.Encode(response))
 }

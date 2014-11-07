@@ -10,7 +10,7 @@ import (
 
 // Encoder is the common encoding and decoding interface
 type Encoder interface {
-	Decode(io.Reader) (sql.Values, *Error)
+	Decode(io.Reader) (sql.Values, *APIError)
 	Encode(interface{}) []byte
 	MediaType() string
 }
@@ -18,10 +18,10 @@ type Encoder interface {
 // JSONEncoder implements JSON encoding and decoding
 type JSONEncoder struct{}
 
-func (c JSONEncoder) Decode(data io.Reader) (sql.Values, *Error) {
+func (c JSONEncoder) Decode(data io.Reader) (sql.Values, *APIError) {
 	values := sql.Values{}
 	if err := json.NewDecoder(data).Decode(&values); err != nil {
-		return values, NewError(400, err.Error())
+		return values, MetaError(400, err.Error())
 	}
 	return values, nil
 }

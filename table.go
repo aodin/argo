@@ -15,6 +15,9 @@ func Table(table *sql.TableElem) TableElem {
 	if table == nil {
 		panic("argo: a table cannot be nil")
 	}
+	if len(table.PrimaryKey()) == 0 {
+		panic("argo: tables must have a primary key")
+	}
 	return TableElem{
 		table: table,
 	}

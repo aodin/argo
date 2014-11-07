@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	sql "github.com/aodin/aspect"
+	"github.com/aodin/aspect/postgres"
 )
 
 type Modifier interface {
@@ -17,17 +18,33 @@ type ResourceSQL struct {
 	conn    sql.Connection
 	table   *sql.TableElem
 
-	// TODO Columns that will be queried
-
-	// Default fields
-
-	// Unique
-
-	// Validations
-
+	// TODO Whitelist columns that will be queried
+	// TODO Unique and foreign keys that must be checked
 }
 
-func (c *ResourceSQL) List(r *Request) (Response, *Error) {
+func (c *ResourceSQL) Validate(values sql.Values) *APIError {
+	// Create an empty error scaffold
+	err := NewError(400)
+	for key, value := range values {
+		column, exists := c.table.C[key]
+		if !exists {
+			err.SetField(key, "does not exist")
+			continue
+		}
+		clean, validateErr := column.Type().Validate(value)
+		if validateErr != nil {
+			err.SetField(column.Name(), validateErr.Error())
+			continue
+		}
+		values[key] = clean
+	}
+	if err.Exists() {
+		return err
+	}
+	return nil
+}
+
+func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 	stmt := c.table.Select()
 	results := make([]sql.Values, 0)
 	if err := c.conn.QueryAll(stmt, &results); err != nil {
@@ -41,35 +58,57 @@ func (c *ResourceSQL) List(r *Request) (Response, *Error) {
 	return MultiResponse{Results: results}, nil
 }
 
-func (c *ResourceSQL) Post(r *Request) (Response, *Error) {
-	values, err := c.encoder.Decode(r.Body)
-	if err != nil {
-		return nil, err
+func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
+	values, apiErr := c.encoder.Decode(r.Body)
+	if apiErr != nil {
+		return nil, apiErr
 	}
 
-	// Confirm all fields exist before posting
+	// Validate all fields
+	if apiErr = c.Validate(values); apiErr != nil {
+		return nil, apiErr
+	}
+
+	// Check required fields
+
+	// Check existence of foreign keys
 
 	// Check unique fields - case insensitive if string?
 
-	stmt := c.table.Insert().Values(values)
+	// TODO only one pk for now
+	key := c.table.PrimaryKey()[0]
+
+	stmt := postgres.Insert(c.table).Returning(c.table.C[key]).Values(values)
 	if stmtErr := stmt.Error(); stmtErr != nil {
-		return nil, NewError(400, stmtErr.Error())
+		return nil, MetaError(400, stmtErr.Error())
 	}
 
-	if _, dbErr := c.conn.Execute(stmt); dbErr != nil {
+	var pk interface{}
+	if dbErr := c.conn.QueryOne(stmt, &pk); dbErr != nil {
 		panic(fmt.Sprintf(
-			"argo: could not insert sql resource post (%s): %s",
+			"argo: could not insert in sql resource post (%s): %s",
 			stmt,
 			dbErr,
 		))
 	}
 
-	// TODO Return the whole object (same as a GET?)
-	fixValues(values)
-	return values, nil
+	// Get the object back
+	selectStmt := c.table.Select().Where(c.table.C[key].Equals(pk))
+
+	// If we get ErrNoResult then something is fucked
+	result := sql.Values{}
+	if dbErr := c.conn.QueryOne(selectStmt, result); dbErr != nil {
+		panic(fmt.Sprintf(
+			"argo: could not query one in sql resource post (%s): %s",
+			selectStmt,
+			dbErr,
+		))
+	}
+	fixValues(result)
+	return result, nil
 }
 
-func (c *ResourceSQL) Get(r *Request) (Response, *Error) {
+func (c *ResourceSQL) Get(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
 	pkKey := c.table.PrimaryKey()[0]
@@ -79,7 +118,7 @@ func (c *ResourceSQL) Get(r *Request) (Response, *Error) {
 	result := sql.Values{}
 	err := c.conn.QueryOne(stmt, result)
 	if err == sql.ErrNoResult {
-		return nil, NewError(404, "No resource with %s %s", pkKey, pkValue)
+		return nil, MetaError(404, "no resource with %s %s", pkKey, pkValue)
 	} else if err != nil {
 		panic(fmt.Sprintf(
 			"argo: could not query one in sql resource get (%s): %s",
@@ -91,7 +130,7 @@ func (c *ResourceSQL) Get(r *Request) (Response, *Error) {
 	return result, nil
 }
 
-func (c *ResourceSQL) Patch(r *Request) (Response, *Error) {
+func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
 	pkKey := c.table.PrimaryKey()[0]
@@ -111,7 +150,7 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *Error) {
 		c.table.C[pkKey].Equals(pkValue),
 	)
 	if stmtErr := stmt.Error(); stmtErr != nil {
-		return nil, NewError(400, stmtErr.Error())
+		return nil, MetaError(400, stmtErr.Error())
 	}
 
 	// TODO Return the whole object (same as a GET?)
@@ -134,12 +173,12 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *Error) {
 		))
 	}
 	if rows == 0 {
-		return nil, NewError(404, "No resource with %s %s", pkKey, pkValue)
+		return nil, MetaError(404, "No resource with %s %s", pkKey, pkValue)
 	}
 	return values, nil
 }
 
-func (c *ResourceSQL) Delete(r *Request) (Response, *Error) {
+func (c *ResourceSQL) Delete(r *Request) (Response, *APIError) {
 	// Get the primary keys
 	// TODO Just one for now - but composites soon!
 	pkKey := c.table.PrimaryKey()[0]
@@ -166,7 +205,7 @@ func (c *ResourceSQL) Delete(r *Request) (Response, *Error) {
 		))
 	}
 	if rows == 0 {
-		return nil, NewError(404, "No resource with %s %s", pkKey, pkValue)
+		return nil, MetaError(404, "No resource with %s %s", pkKey, pkValue)
 	}
 	return nil, nil
 }
@@ -211,7 +250,10 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 	}
 	for _, field := range fields {
 		if err := field.Modify(resource); err != nil {
-			panic(err)
+			panic(fmt.Sprintf(
+				"argo: failed to modify resource: %s",
+				err,
+			))
 		}
 	}
 	return resource
