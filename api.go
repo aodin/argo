@@ -62,6 +62,22 @@ func (api *API) Add(resource *ResourceSQL) error {
 }
 
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Publish the list of resources at root
+	if r.URL.Path == api.prefix {
+		// TODO What encoder to use?
+		encoder := JSONEncoder{}
+
+		// TODO alphabetical?
+		response := make(map[string]string)
+		for name, _ := range api.resources {
+			// TODO base url? link?
+			response[name] = fmt.Sprintf("%s%s", api.prefix, name)
+		}
+		w.Header().Set("Content-Type", encoder.MediaType())
+		w.Write(encoder.Encode(response))
+		return
+	}
+
 	// Parse the API parameters and build the request object
 	resource, params, _ := api.routes.getValue(r.URL.Path)
 	if resource == nil {
@@ -114,8 +130,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if response == nil {
-		// Set 204 no content
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	// Always set the media type

@@ -157,10 +157,10 @@ func TestSimpleResourceSQL(t *testing.T) {
 	assert.NotNil(errAPI.Fields["id"])
 
 	// PATCH - missing id (data must be valid)
-	// response, errAPI = users.Patch(mockRequestID(nil, 0))
-	// assert.Equal(true, errAPI.Exists())
-	// assert.Equal(404, errAPI.code)
-	// assert.Equal(1, len(errAPI.Meta))
+	response, errAPI = users.Patch(mockRequestID([]byte(`{"name":"Q"}`), 0))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(404, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
 
 	// PATCH - invalid id
 	response, errAPI = users.Patch(mockRequestID(nil, "whatever"))
@@ -182,7 +182,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 
 	// TODO PATCH - duplicates
 
-	// TODO PATCH - id
+	// PATCH - id
 	_, errAPI = users.Patch(mockRequestID([]byte(`{"id":"3"}`), uid))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)

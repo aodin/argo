@@ -7,6 +7,7 @@ import (
 )
 
 type IncludeElem struct {
+	name    string
 	src     string
 	dest    string
 	table   *sql.TableElem
@@ -72,7 +73,18 @@ func (elem IncludeElem) Modify(resource *ResourceSQL) error {
 		)
 	}
 
+	// The include name can't also be taken
+	if _, exists := resource.table.C[elem.name]; exists {
+		return fmt.Errorf(
+			"argo: the parent table already has a field named %s",
+			elem.name,
+		)
+	}
+
+	// TODO Create a common field struct, with validation / create?
+
 	// Add the included table to the requested methods
+	// TODO toggle which it gets added to
 	resource.listIncludes = append(resource.listIncludes, elem)
 	resource.detailIncludes = append(resource.detailIncludes, elem)
 	return nil
@@ -80,7 +92,7 @@ func (elem IncludeElem) Modify(resource *ResourceSQL) error {
 
 // TODO Automatic matching of foreign key tables
 // TODO Toggle Collection or List only
-func Include(table *sql.TableElem, src, dest string) IncludeElem {
+func Include(name string, table *sql.TableElem, src, dest string) IncludeElem {
 	if table == nil {
 		panic("argo: a table cannot be nil")
 	}
@@ -94,6 +106,7 @@ func Include(table *sql.TableElem, src, dest string) IncludeElem {
 		))
 	}
 	return IncludeElem{
+		name:    name,
 		table:   table,
 		selects: ColumnSet(table.Columns()...),
 		src:     src,
