@@ -141,12 +141,17 @@ func (c *ResourceSQL) Get(r *Request) (Response, *APIError) {
 		))
 	}
 
-	// Add the includes
-	// for _, include := range c.detailIncludes {
-
-	// }
-
 	fixValues(result)
+
+	// Add the includes
+	for _, include := range c.detailIncludes {
+		if dbErr := include.Query(c.conn, result); dbErr != nil {
+			panic(fmt.Sprintf(
+				"argo: could not query includes in sql resource get (%s): %s",
+				dbErr,
+			))
+		}
+	}
 	return result, nil
 }
 
@@ -297,7 +302,7 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 		encoder: JSONEncoder{},
 		conn:    c,
 		table:   t.table, // the parameter table is argo.TableElem
-		selects: ColumnSet(t.table.Columns()...),
+		selects: t.selects,
 		inserts: ColumnSet(t.table.Columns()...),
 	}
 

@@ -83,7 +83,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 	// Resources must be created with a connection
 	users := Resource(
 		tx,
-		Table(usersDB),
+		FromTable(usersDB),
 	)
 
 	// Since *APIErr implements error, explicitly request an API error

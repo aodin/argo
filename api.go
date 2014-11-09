@@ -88,7 +88,6 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Determine the encoder type
 	// TODO this could be done with routes / headers / auth
 	encoder := resource.Encoder()
-
 	request := &Request{Request: r, Params: params}
 
 	var response Response
