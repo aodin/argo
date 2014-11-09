@@ -341,7 +341,7 @@ func invalidName(name string) error {
 // Resource created a new ResourceSQL from the given table and modifiers.
 // Panic on errors.
 func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
-	name := t.table.Name
+	name := t.Name
 	if err := invalidName(name); err != nil {
 		panic(err)
 	}
