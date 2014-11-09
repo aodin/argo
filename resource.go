@@ -21,8 +21,8 @@ type ResourceSQL struct {
 	inserts Columns
 
 	// Includes
-	listIncludes   []IncludeElem
-	detailIncludes []IncludeElem
+	listIncludes   []ManyElem
+	detailIncludes []ManyElem
 
 	// TODO save pk columns
 	// TODO Unique and foreign keys that must be checked
@@ -50,6 +50,22 @@ func (c *ResourceSQL) Validate(values sql.Values) *APIError {
 	return nil
 }
 
+func (c *ResourceSQL) HasRequired(values sql.Values) *APIError {
+	// TODO use an existing error scaffold?
+	err := NewError(400)
+	for _, column := range c.inserts {
+		if column.Type().IsRequired() {
+			if _, exists := values[column.Name()]; !exists {
+				err.SetField(column.Name(), "is required")
+			}
+		}
+	}
+	if err.Exists() {
+		return err
+	}
+	return nil
+}
+
 func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 	stmt := sql.Select(c.selects)
 	results := make([]sql.Values, 0)
@@ -69,20 +85,54 @@ func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
 	if apiErr != nil {
 		return nil, apiErr
 	}
+	if len(values) == 0 {
+		return nil, MetaError(
+			400,
+			"refusing to create an entry without values",
+		)
+	}
 
+	// TODO persist errors?
 	// Validate all fields
 	if apiErr = c.Validate(values); apiErr != nil {
 		return nil, apiErr
 	}
 
 	// Check required fields
+	if apiErr = c.HasRequired(values); apiErr != nil {
+		return nil, apiErr
+	}
 
-	// Check existence of foreign keys
-
-	// Check unique fields - case insensitive if string?
+	// TODO Check existence of foreign keys
+	// TODO Check unique fields - case insensitive if string?
 
 	// TODO only one pk for now
 	key := c.table.PrimaryKey()[0]
+
+	// Check for uniques using strict equality
+	uniques := c.table.UniqueConstraints()
+	for _, unique := range uniques {
+		// TODO Alternate forms of equality
+		columns := make([]sql.Selectable, len(unique))
+		clauses := make([]sql.Clause, len(unique))
+		for i, name := range unique {
+			columns[i] = c.table.C[name]
+			clauses[i] = c.table.C[name].Equals(values[name])
+		}
+		stmt := sql.Select(columns...).Where(sql.AllOf(clauses...))
+
+		result := sql.Values{}
+		dbErr := c.conn.QueryOne(stmt, result)
+		if dbErr == nil {
+			return nil, MetaError(400, "duplicate entry for values %s", result)
+		} else if dbErr != sql.ErrNoResult {
+			panic(fmt.Sprintf(
+				"argo: could not select uniques in sql resource post (%s): %s",
+				stmt,
+				dbErr,
+			))
+		}
+	}
 
 	stmt := postgres.Insert(c.inserts).Returning(c.table.C[key]).Values(values)
 	if stmtErr := stmt.Error(); stmtErr != nil {

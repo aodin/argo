@@ -24,12 +24,26 @@ type user struct {
 
 var usersDB = sql.Table("users",
 	sql.Column("id", postgres.Serial{}),
-	sql.Column("name", sql.String{}),
-	sql.Column("age", sql.Integer{}),
+	sql.Column("name", sql.String{NotNull: true}),
+	sql.Column("age", sql.Integer{NotNull: true}),
 	sql.Column("is_active", sql.Boolean{Default: sql.True}),
-	sql.Column("password", sql.String{}),
+	sql.Column("password", sql.String{NotNull: true}),
 	sql.Column("created", sql.Timestamp{Default: "now() at time zone 'utc'"}),
 	sql.PrimaryKey("id"),
+	sql.Unique("name"),
+)
+
+type edge struct {
+	A int64 `json:"a"`
+	B int64 `json:"b"`
+}
+
+var edgesDB = sql.Table("edges",
+	sql.Column("id", postgres.Serial{}),
+	sql.Column("a", sql.Integer{NotNull: true}),
+	sql.Column("b", sql.Integer{NotNull: true}),
+	sql.PrimaryKey("id"),
+	sql.Unique("a", "b"),
 )
 
 type ClosingBuffer struct {
@@ -55,9 +69,7 @@ func mockRequestID(body []byte, id interface{}) *Request {
 	}
 }
 
-func TestSimpleResourceSQL(t *testing.T) {
-	assert := assert.New(t)
-
+func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, *sql.TX) {
 	// Connect to the database specified in the test db.json config
 	// Default to the Travis CI settings if no file is found
 	conf, err := sql.ParseTestConfig("./db.json")
@@ -69,16 +81,24 @@ func TestSimpleResourceSQL(t *testing.T) {
 	}
 	conn, err := sql.Connect(conf.Driver, conf.Credentials())
 	require.Nil(t, err)
-	defer conn.Close()
 
 	// Perform all tests in a transaction and always rollback
 	tx, err := conn.Begin()
 	require.Nil(t, err)
-	defer tx.Rollback()
 
-	// Create the users schema
-	_, err = tx.Execute(usersDB.Create())
-	require.Nil(t, err)
+	// Create the given schemas
+	for _, table := range tables {
+		_, err = tx.Execute(table.Create())
+		require.Nil(t, err)
+	}
+	return conn, tx
+}
+
+func TestSimpleResourceSQL(t *testing.T) {
+	assert := assert.New(t)
+	conn, tx := initSchemas(t, usersDB)
+	defer tx.Rollback()
+	defer conn.Close()
 
 	// Resources must be created with a connection
 	users := Resource(
@@ -115,26 +135,6 @@ func TestSimpleResourceSQL(t *testing.T) {
 	assert.Equal(admin.IsActive, result["is_active"])
 	assert.Equal(admin.Password, result["password"])
 	assert.Equal(true, result["created"].(time.Time).Before(time.Now()))
-
-	// POST - include primary key
-	client := user{ID: 2, Name: "client"}
-	b, err = json.Marshal(client)
-	require.Nil(t, err)
-	_, errAPI = users.Post(mockRequest(b))
-	assert.Equal(400, errAPI.code)
-	assert.NotNil(errAPI.Fields["id"])
-
-	// POST - malformed json
-	_, errAPI = users.Post(mockRequest([]byte(`{fsfds`)))
-	assert.Equal(true, errAPI.Exists())
-	assert.Equal(400, errAPI.code)
-	assert.Equal(1, len(errAPI.Meta))
-
-	// POST - extra fields
-	_, errAPI = users.Post(mockRequest([]byte(`{"extra":"yup"}`)))
-	assert.Equal(true, errAPI.Exists())
-	assert.Equal(400, errAPI.code)
-	assert.NotNil(errAPI.Fields["extra"])
 
 	// GET - valid
 	uid := result["id"].(int64)
@@ -215,4 +215,69 @@ func TestSimpleResourceSQL(t *testing.T) {
 	response, errAPI = users.Delete(mockRequestID(nil, uid))
 	assert.Nil(errAPI)
 	assert.Nil(response)
+}
+
+func TestResource_Post(t *testing.T) {
+	assert := assert.New(t)
+	conn, tx := initSchemas(t, usersDB, edgesDB)
+	defer tx.Rollback()
+	defer conn.Close()
+
+	users := Resource(tx, FromTable(usersDB))
+	edges := Resource(tx, FromTable(edgesDB))
+
+	var errAPI *APIError
+
+	// POST without all required fields
+	_, errAPI = users.Post(mockRequest([]byte(`{}`)))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+
+	// Required fields should have specific errors
+	assert.NotNil(errAPI.Fields["password"])
+	assert.NotNil(errAPI.Fields["age"])
+	assert.NotNil(errAPI.Fields["name"])
+
+	// POST - include primary key
+	b, err := json.Marshal(user{ID: 2, Name: "client"})
+	require.Nil(t, err)
+	_, errAPI = users.Post(mockRequest(b))
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["id"])
+
+	// POST - malformed json
+	_, errAPI = users.Post(mockRequest([]byte(`{fsfds`)))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
+
+	// POST - extra fields
+	_, errAPI = users.Post(mockRequest([]byte(`{"extra":"yup"}`)))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.NotNil(errAPI.Fields["extra"])
+
+	// POST valid
+	b, err = json.Marshal(user{Name: "admin", Password: "secret"})
+	require.Nil(t, err)
+
+	_, errAPI = users.Post(mockRequest(b))
+	assert.Nil(errAPI)
+
+	// POST a duplicate name
+	_, errAPI = users.Post(mockRequest(b))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
+
+	// Check uniqueness of composite constraints
+	b, err = json.Marshal(edge{A: 2, B: 3})
+	require.Nil(t, err)
+	_, errAPI = edges.Post(mockRequest(b))
+	assert.Nil(errAPI)
+
+	_, errAPI = edges.Post(mockRequest(b))
+	assert.Equal(true, errAPI.Exists())
+	assert.Equal(400, errAPI.code)
+	assert.Equal(1, len(errAPI.Meta))
 }

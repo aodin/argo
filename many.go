@@ -6,7 +6,7 @@ import (
 	sql "github.com/aodin/aspect"
 )
 
-type IncludeElem struct {
+type ManyElem struct {
 	name        string // name where values will be added to parent table
 	fkName      string // c[fkName].Equals(fkValue)
 	fkValueName string
@@ -19,7 +19,7 @@ type IncludeElem struct {
 	}
 }
 
-func (elem IncludeElem) AsMap(key, value string) IncludeElem {
+func (elem ManyElem) AsMap(key, value string) ManyElem {
 	// Both key and value must be selectable columns
 	if !elem.selects.Has(key) {
 		panic(fmt.Sprintf(
@@ -45,7 +45,7 @@ func (elem IncludeElem) AsMap(key, value string) IncludeElem {
 	return elem
 }
 
-func (elem IncludeElem) Exclude(names ...string) IncludeElem {
+func (elem ManyElem) Exclude(names ...string) ManyElem {
 	for _, name := range names {
 		if _, ok := elem.table.C[name]; !ok {
 			panic(fmt.Sprintf(
@@ -65,7 +65,7 @@ func (elem IncludeElem) Exclude(names ...string) IncludeElem {
 	return elem
 }
 
-func (elem IncludeElem) Modify(resource *ResourceSQL) error {
+func (elem ManyElem) Modify(resource *ResourceSQL) error {
 	if resource.table == nil {
 		return fmt.Errorf("argo: Many statements can only modify resources with an existing table")
 	}
@@ -111,7 +111,7 @@ func (elem IncludeElem) Modify(resource *ResourceSQL) error {
 }
 
 // Query is the database query method used for single result detail methods.
-func (elem IncludeElem) Query(conn sql.Connection, values sql.Values) error {
+func (elem ManyElem) Query(conn sql.Connection, values sql.Values) error {
 	// TODO panic or errors
 	// TODO Query by a value that doesn't exist in values?
 	fkValue, ok := values[elem.fkValueName]
@@ -167,14 +167,14 @@ func (elem IncludeElem) Query(conn sql.Connection, values sql.Values) error {
 	return nil
 }
 
-func Many(name string, table *sql.TableElem) IncludeElem {
+func Many(name string, table *sql.TableElem) ManyElem {
 	if table == nil {
 		panic("argo: tables in many statements cannot be nil")
 	}
 	if err := validateFieldName(name); err != nil {
 		panic(err.Error())
 	}
-	return IncludeElem{
+	return ManyElem{
 		name:    name,
 		table:   table,
 		selects: ColumnSet(table.Columns()...),
