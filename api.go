@@ -138,9 +138,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func New() *API {
-	api := &API{
+	return &API{
+		prefix:    "/",
 		resources: make(map[string]Rest),
 		routes:    &node{},
 	}
-	return api
 }

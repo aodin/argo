@@ -128,7 +128,7 @@ func (elem ManyElem) Query(conn sql.Connection, values sql.Values) error {
 		elem.table.C[elem.fkName].Equals(fkValue),
 	)
 
-	var results []sql.Values
+	results := make([]sql.Values, 0)
 	if err := conn.QueryAll(stmt, &results); err != nil {
 		panic(fmt.Sprintf(
 			"argo: error while querying included many for key '%d' (%s): %s",
