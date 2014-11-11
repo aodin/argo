@@ -54,6 +54,7 @@ func (c *ResourceSQL) HasRequired(values sql.Values) *APIError {
 	// TODO use an existing error scaffold?
 	err := NewError(400)
 	for _, column := range c.inserts {
+		// TODO precompute required fields
 		if column.Type().IsRequired() {
 			if _, exists := values[column.Name()]; !exists {
 				err.SetField(column.Name(), "is required")
@@ -76,7 +77,7 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 			err,
 		))
 	}
-	fixValues(results...)
+	FixValues(results...)
 	return MultiResponse{Results: results}, nil
 }
 
@@ -160,7 +161,7 @@ func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
 			dbErr,
 		))
 	}
-	fixValues(result)
+	FixValues(result)
 	return result, nil
 }
 
@@ -191,7 +192,7 @@ func (c *ResourceSQL) Get(r *Request) (Response, *APIError) {
 		))
 	}
 
-	fixValues(result)
+	FixValues(result)
 
 	// Add the includes
 	for _, include := range c.detailIncludes {
@@ -273,7 +274,7 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 
 	// TODO includes?
 
-	fixValues(result)
+	FixValues(result)
 	return result, nil
 }
 
@@ -319,19 +320,7 @@ func (c *ResourceSQL) Encoder() Encoder {
 	return c.encoder
 }
 
-// sql.Values objects encode []byte as base64. Cast them to strings.
-func fixValues(results ...sql.Values) {
-	for _, result := range results {
-		for k, v := range result {
-			switch v.(type) {
-			case []byte:
-				result[k] = string(v.([]byte))
-			}
-		}
-	}
-}
-
-func invalidName(name string) error {
+func InvalidName(name string) error {
 	if name == "" {
 		return fmt.Errorf("argo: invalid resource name '%s'", name)
 	}
@@ -342,7 +331,7 @@ func invalidName(name string) error {
 // Panic on errors.
 func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 	name := t.Name
-	if err := invalidName(name); err != nil {
+	if err := InvalidName(name); err != nil {
 		panic(err)
 	}
 

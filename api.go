@@ -22,6 +22,14 @@ type API struct {
 	routes    *node
 }
 
+// DetermineEncoder will attempt to match the requested content type with
+// an Encoder.
+// TODO Separate Decoder and Encoder
+// TODO this could be done with routes / headers / auth
+func (api *API) DetermineEncoder(r *http.Request) Encoder {
+	return JSONEncoder{}
+}
+
 func (api *API) SetPrefix(prefix string) *API {
 	// If empty, then set to slash
 	if prefix == "" {
@@ -33,40 +41,44 @@ func (api *API) SetPrefix(prefix string) *API {
 	return api
 }
 
-// Add adds the resource to the API using its name
+// Add adds the SQL resource to the API using its name
 func (api *API) Add(resource *ResourceSQL) error {
-	name := resource.Name
+	// Build the routes from the primary key(s)
+	return api.AddRest(resource.Name, resource, resource.table.PrimaryKey()...)
+}
+
+// AddRest adds the Rest-ful resource to the API
+func (api *API) AddRest(name string, resource Rest, keys ...string) error {
 	if _, exists := api.resources[name]; exists {
 		return fmt.Errorf(
-			"argo: resource %s already exists",
+			"argo: a resource named '%s' already exists",
 			name,
 		)
 	}
 	api.resources[name] = resource
 
-	// Build the routes from the primary key(s)
-	keys := resource.table.PrimaryKey()
-	pks := make([]string, len(keys))
-	for i, key := range keys {
-		pks[i] = fmt.Sprintf(":%s", key)
-	}
-	pk := strings.Join(pks, "/")
-
-	// Also add the routes
+	// TODO The prefix should be left out of the routing - it adds overhead
 	p := api.prefix
 	api.routes.addRoute(fmt.Sprintf("%s%s", p, name), resource)
 	api.routes.addRoute(fmt.Sprintf("%s%s/", p, name), resource)
-	api.routes.addRoute(fmt.Sprintf("%s%s/%s", p, name, pk), resource)
-	api.routes.addRoute(fmt.Sprintf("%s%s/%s/", p, name, pk), resource)
+
+	if len(keys) > 0 {
+		pks := make([]string, len(keys))
+		for i, key := range keys {
+			pks[i] = fmt.Sprintf(":%s", key)
+		}
+		pk := strings.Join(pks, "/")
+		api.routes.addRoute(fmt.Sprintf("%s%s/%s", p, name, pk), resource)
+		api.routes.addRoute(fmt.Sprintf("%s%s/%s/", p, name, pk), resource)
+	}
 	return nil
 }
 
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	encoder := api.DetermineEncoder(r)
+
 	// Publish the list of resources at root
 	if r.URL.Path == api.prefix {
-		// TODO What encoder to use?
-		encoder := JSONEncoder{}
-
 		// TODO alphabetical?
 		response := make(map[string]string)
 		for name, _ := range api.resources {
@@ -85,10 +97,12 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine the encoder type
-	// TODO this could be done with routes / headers / auth
-	encoder := resource.Encoder()
-	request := &Request{Request: r, Params: params}
+	// Build the new argo request instance
+	request := &Request{
+		Request:  r,
+		Encoding: encoder,
+		Params:   params,
+	}
 
 	var response Response
 	var err *APIError

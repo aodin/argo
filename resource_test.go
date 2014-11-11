@@ -69,7 +69,7 @@ func mockRequestID(body []byte, id interface{}) *Request {
 	}
 }
 
-func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, *sql.TX) {
+func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, sql.Transaction) {
 	// Connect to the database specified in the test db.json config
 	// Default to the Travis CI settings if no file is found
 	conf, err := sql.ParseTestConfig("./db.json")

@@ -138,7 +138,7 @@ func (elem ManyElem) Query(conn sql.Connection, values sql.Values) error {
 		))
 	}
 
-	fixValues(results...)
+	FixValues(results...)
 	if elem.asMap == nil {
 		values[elem.name] = results
 		return nil
