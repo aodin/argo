@@ -32,13 +32,25 @@ func HasRequired(values sql.Values, keys ...string) *APIError {
 	return nil
 }
 
-func ValidateUsing(values sql.Values, types map[string]sql.Type) *APIError {
+func ValidateUsing(values sql.Values, types map[string]Validator) *APIError {
 	// Create an empty error scaffold
 	err := NewError(400)
+
+	// Are all the required values present?
+	// for key, validator := range types {
+	// 	if validator.IsRequired() {
+	// 		if _, exists := values[key]; !exists {
+	// 			err.SetField(key, "is required")
+	// 		}
+	// 	}
+	// }
+
+	// Are the values valid?
 	for key, value := range values {
 		t, exists := types[key]
+		// Extra fields will produce an error
 		if !exists {
-			err.SetField(key, "does not exist")
+			err.SetField(key, "does not exist in this resource")
 			continue
 		}
 		clean, validateErr := t.Validate(value)

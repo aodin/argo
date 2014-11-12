@@ -2,7 +2,7 @@ package argo
 
 import ()
 
-// Rest is the common interface for JSON REST resources
+// Rest is the common interface for REST-ful resources
 type Rest interface {
 	List(*Request) (Response, *APIError)
 	Post(*Request) (Response, *APIError)
@@ -11,7 +11,7 @@ type Rest interface {
 	Delete(*Request) (Response, *APIError)
 }
 
-// TODO Alias Handle to Rest as a hack
+// Handle is an alias for Rest
 type Handle interface {
 	Rest
 }

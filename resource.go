@@ -81,7 +81,7 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 }
 
 func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
-	values, apiErr := r.Decoding.Decode(r.Body)
+	values, apiErr := r.Decode(r.Body)
 	if apiErr != nil {
 		return nil, apiErr
 	}
@@ -220,7 +220,7 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 	}
 
 	// Validate all fields
-	values, apiErr := r.Decoding.Decode(r.Body)
+	values, apiErr := r.Decode(r.Body)
 	if apiErr != nil {
 		return nil, apiErr
 	}

@@ -1,8 +1,11 @@
 package argo
 
 import (
+	"io"
 	"net/http"
 	"net/url"
+
+	sql "github.com/aodin/aspect"
 )
 
 type Request struct {
@@ -11,6 +14,14 @@ type Request struct {
 	Decoding Decoder
 	Params   Params
 	Values   url.Values
+}
+
+func (r *Request) Decode(data io.Reader) (sql.Values, *APIError) {
+	if r.Decoding == nil {
+		// Default to JSON if no decoder was specified
+		r.Decoding = JSON{}
+	}
+	return r.Decoding.Decode(data)
 }
 
 // Get gets a GET parameter and ONLY a get parameter - never POST form data
