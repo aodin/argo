@@ -4,8 +4,6 @@ import ()
 
 // Rest is the common interface for JSON REST resources
 type Rest interface {
-	Encoder() Encoder
-
 	List(*Request) (Response, *APIError)
 	Post(*Request) (Response, *APIError)
 	Get(*Request) (Response, *APIError)

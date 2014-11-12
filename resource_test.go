@@ -56,7 +56,9 @@ func (cb ClosingBuffer) Close() (err error) {
 
 func mockRequest(body []byte) *Request {
 	return &Request{
-		Request: &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
+		Request:  &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
+		Encoding: JSON{},
+		Decoding: JSON{},
 	}
 }
 
@@ -65,7 +67,9 @@ func mockRequestID(body []byte, id interface{}) *Request {
 		Request: &http.Request{
 			Body: ClosingBuffer{bytes.NewBuffer(body)},
 		},
-		Params: Params{{Key: "id", Value: fmt.Sprintf("%d", id)}},
+		Encoding: JSON{},
+		Decoding: JSON{},
+		Params:   Params{{Key: "id", Value: fmt.Sprintf("%d", id)}},
 	}
 }
 

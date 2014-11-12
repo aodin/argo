@@ -22,12 +22,15 @@ type API struct {
 	routes    *node
 }
 
-// DetermineEncoder will attempt to match the requested content type with
-// an Encoder.
-// TODO Separate Decoder and Encoder
+// GetEncoder matches the request Accept-Encoding header with an Encoder.
 // TODO this could be done with routes / headers / auth
-func (api *API) DetermineEncoder(r *http.Request) Encoder {
-	return JSONEncoder{}
+func (api *API) GetEncoder(r *http.Request) Encoder {
+	return JSON{}
+}
+
+// GetDecoder matches the request Content-Type header with a Decoder.
+func (api *API) GetDecoder(r *http.Request) Decoder {
+	return JSON{}
 }
 
 func (api *API) SetPrefix(prefix string) *API {
@@ -75,7 +78,8 @@ func (api *API) AddRest(name string, resource Rest, keys ...string) error {
 }
 
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	encoder := api.DetermineEncoder(r)
+	encoder := api.GetEncoder(r)
+	decoder := api.GetDecoder(r)
 
 	// Publish the list of resources at root
 	if r.URL.Path == api.prefix {
@@ -98,9 +102,11 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the new argo request instance
+	// GetEncoder and GetDecoder should live in the argo Request constructor
 	request := &Request{
 		Request:  r,
 		Encoding: encoder,
+		Decoding: decoder,
 		Params:   params,
 	}
 
@@ -143,7 +149,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if response == nil {
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusNoContent) // 204
 		return
 	}
 	// Always set the media type

@@ -8,6 +8,7 @@ import (
 type Request struct {
 	*http.Request
 	Encoding Encoder
+	Decoding Decoder
 	Params   Params
 	Values   url.Values
 }

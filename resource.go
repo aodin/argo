@@ -14,7 +14,6 @@ type Modifier interface {
 // ResourceSQL is the internal representation of a REST resource backed by SQL.
 type ResourceSQL struct {
 	Name    string
-	encoder Encoder
 	conn    sql.Connection
 	table   *sql.TableElem
 	selects Columns
@@ -82,7 +81,7 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 }
 
 func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
-	values, apiErr := c.encoder.Decode(r.Body)
+	values, apiErr := r.Decoding.Decode(r.Body)
 	if apiErr != nil {
 		return nil, apiErr
 	}
@@ -221,7 +220,7 @@ func (c *ResourceSQL) Patch(r *Request) (Response, *APIError) {
 	}
 
 	// Validate all fields
-	values, apiErr := c.encoder.Decode(r.Body)
+	values, apiErr := r.Decoding.Decode(r.Body)
 	if apiErr != nil {
 		return nil, apiErr
 	}
@@ -316,10 +315,6 @@ func (c *ResourceSQL) Delete(r *Request) (Response, *APIError) {
 	return nil, nil
 }
 
-func (c *ResourceSQL) Encoder() Encoder {
-	return c.encoder
-}
-
 func InvalidName(name string) error {
 	if name == "" {
 		return fmt.Errorf("argo: invalid resource name '%s'", name)
@@ -338,7 +333,6 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 	// Resources are JSON encoded by default
 	resource := &ResourceSQL{
 		Name:    name,
-		encoder: JSONEncoder{},
 		conn:    c,
 		table:   t.table, // the parameter table is argo.TableElem
 		selects: t.selects,

@@ -4,21 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	sql "github.com/aodin/aspect"
+	"gopkg.in/yaml.v2"
 )
 
-// Encoder is the common encoding and decoding interface
-type Encoder interface {
+// Decoder is the common decoding interface
+type Decoder interface {
 	Decode(io.Reader) (sql.Values, *APIError)
-	Encode(interface{}) []byte
+}
+
+// Encoder is the common encoding interface
+type Encoder interface {
+	Encode(interface{}) []byte // Our responses should never error
 	MediaType() string
 }
 
-// JSONEncoder implements JSON encoding and decoding
-type JSONEncoder struct{}
+// JSON implements JSON encoding and decoding
+type JSON struct{}
 
-func (c JSONEncoder) Decode(data io.Reader) (sql.Values, *APIError) {
+func (c JSON) Decode(data io.Reader) (sql.Values, *APIError) {
 	values := sql.Values{}
 	if err := json.NewDecoder(data).Decode(&values); err != nil {
 		return values, MetaError(400, err.Error())
@@ -26,17 +32,49 @@ func (c JSONEncoder) Decode(data io.Reader) (sql.Values, *APIError) {
 	return values, nil
 }
 
-func (c JSONEncoder) Encode(i interface{}) []byte {
+func (c JSON) Encode(i interface{}) []byte {
+	// TODO turn off pretty printing by default?
 	b, err := json.MarshalIndent(i, "", "  ")
 	if err != nil {
 		panic(fmt.Sprintf(
-			"argo: could not json encode response: %s",
+			"argo: could not JSON encode response: %s",
 			err,
 		))
 	}
 	return b
 }
 
-func (c JSONEncoder) MediaType() string {
+func (c JSON) MediaType() string {
 	return "application/json"
+}
+
+// YAML implements YAML encoding and decoding
+type YAML struct{}
+
+func (c YAML) Decode(data io.Reader) (sql.Values, *APIError) {
+	values := sql.Values{}
+	// TODO limit reader
+	b, err := ioutil.ReadAll(data)
+	if err != nil {
+		return values, MetaError(400, err.Error())
+	}
+	if err = yaml.Unmarshal(b, &values); err != nil {
+		return values, MetaError(400, err.Error())
+	}
+	return values, nil
+}
+
+func (c YAML) Encode(i interface{}) []byte {
+	b, err := yaml.Marshal(i)
+	if err != nil {
+		panic(fmt.Sprintf(
+			"argo: could not YAML encode response: %s",
+			err,
+		))
+	}
+	return b
+}
+
+func (c YAML) MediaType() string {
+	return "application/x-yaml"
 }
