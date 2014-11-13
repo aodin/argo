@@ -8,6 +8,19 @@ import (
 	sql "github.com/aodin/aspect"
 )
 
+// TODO A Request constructor function
+
+// GetEncoder matches the request Accept-Encoding header with an Encoder.
+// TODO this could be done with routes / headers / auth
+func GetEncoder(r *http.Request) Encoder {
+	return JSON{}
+}
+
+// GetDecoder matches the request Content-Type header with a Decoder.
+func GetDecoder(r *http.Request) Decoder {
+	return JSON{}
+}
+
 type Request struct {
 	*http.Request
 	Encoding Encoder

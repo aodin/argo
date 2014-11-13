@@ -218,7 +218,12 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 	// Add them back into the original values array
 	// TODO as map
 	for _, value := range values {
-		value[elem.name] = byFkValue[value[elem.fk.ForeignName()]]
+		fkValues, ok := byFkValue[value[elem.fk.ForeignName()]]
+		if ok {
+			value[elem.name] = fkValues
+		} else {
+			value[elem.name] = make([]interface{}, 0) // JSON output as []
+		}
 	}
 	return nil
 }

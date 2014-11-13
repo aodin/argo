@@ -23,15 +23,8 @@ type API struct {
 	routes    *node
 }
 
-// GetEncoder matches the request Accept-Encoding header with an Encoder.
-// TODO this could be done with routes / headers / auth
-func (api *API) GetEncoder(r *http.Request) Encoder {
-	return JSON{}
-}
-
-// GetDecoder matches the request Content-Type header with a Decoder.
-func (api *API) GetDecoder(r *http.Request) Decoder {
-	return JSON{}
+func (api *API) Prefix() string {
+	return api.prefix
 }
 
 func (api *API) SetPrefix(prefix string) *API {
@@ -78,44 +71,37 @@ func (api *API) AddRest(name string, resource Rest, keys ...string) error {
 	return nil
 }
 
-func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	encoder := api.GetEncoder(r)
-	decoder := api.GetDecoder(r)
-
+// Handle makes an API implement a handler with an argo Request instance
+func (api *API) Handle(w http.ResponseWriter, request *Request) {
 	// Publish the list of resources at root
-	if r.URL.Path == api.prefix {
+	if request.URL.Path == api.prefix {
 		// TODO alphabetical?
 		response := make(map[string]string)
 		for name, _ := range api.resources {
 			// TODO base url? link?
 			response[name] = fmt.Sprintf("%s%s", api.prefix, name)
 		}
-		w.Header().Set("Content-Type", encoder.MediaType())
-		w.Write(encoder.Encode(response))
+		w.Header().Set("Content-Type", request.Encoding.MediaType())
+		w.Write(request.Encoding.Encode(response))
 		return
 	}
 
 	// Parse the API parameters and build the request object
-	resource, params, _ := api.routes.getValue(r.URL.Path)
+	resource, params, _ := api.routes.getValue(request.URL.Path)
 	if resource == nil {
-		http.NotFound(w, r)
+		http.NotFound(w, request.Request)
 		return
 	}
 
 	// Build the new argo request instance
 	// GetEncoder and GetDecoder should live in the argo Request constructor
-	request := &Request{
-		Request:  r,
-		Encoding: encoder,
-		Decoding: decoder,
-		Params:   params,
-	}
+	request.Params = params
 
 	var response Response
 	var err *APIError
 
 	// If there are no parameters
-	method := method(r.Method)
+	method := method(request.Method)
 	if len(params) == 0 {
 		switch method {
 		case GET:
@@ -146,7 +132,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		err.Write(w, encoder)
+		err.Write(w, request.Encoding)
 		return
 	}
 	if response == nil {
@@ -154,10 +140,22 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Always set the media type
-	w.Header().Set("Content-Type", encoder.MediaType())
-	w.Write(encoder.Encode(response))
+	w.Header().Set("Content-Type", request.Encoding.MediaType())
+	w.Write(request.Encoding.Encode(response))
 }
 
+// ServeHTTP implements the http Handler interface for APIs
+func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// TODO request constructor function?
+	request := &Request{
+		Request:  r,
+		Encoding: GetEncoder(r),
+		Decoding: GetDecoder(r),
+	}
+	api.Handle(w, request)
+}
+
+// New creates a new API at root '/'
 func New() *API {
 	return &API{
 		prefix:    "/",
