@@ -122,6 +122,11 @@ func (elem ManyToManyElem) Query(c sql.Connection, values sql.Values) error {
 	return nil
 }
 
+// QueryAll is the database query method used for multiple result list methods.
+func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
+	return nil
+}
+
 func ManyToMany(name string, table, through *sql.TableElem) ManyToManyElem {
 	if table == nil || through == nil {
 		panic("argo: tables in many to many statements cannot be nil")

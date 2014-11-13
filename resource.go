@@ -13,6 +13,7 @@ type Modifier interface {
 
 type Include interface {
 	Query(sql.Connection, sql.Values) error
+	QueryAll(sql.Connection, []sql.Values) error
 }
 
 // ResourceSQL is the internal representation of a REST resource backed by SQL.
@@ -81,6 +82,17 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 		))
 	}
 	FixValues(results...)
+
+	// Add the includes
+	for _, include := range c.detailIncludes {
+		if dbErr := include.QueryAll(c.conn, results); dbErr != nil {
+			panic(fmt.Sprintf(
+				"argo: could not query all includes in sql resource list (%s): %s",
+				dbErr,
+			))
+		}
+	}
+
 	return MultiResponse{Results: results}, nil
 }
 

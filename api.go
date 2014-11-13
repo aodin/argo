@@ -9,11 +9,12 @@ import (
 type method string
 
 const (
-	GET    method = "GET"
-	POST   method = "POST"
-	PUT    method = "PUT"
-	PATCH  method = "PATCH"
-	DELETE method = "DELETE"
+	GET     method = "GET"
+	POST    method = "POST"
+	PUT     method = "PUT"
+	PATCH   method = "PATCH"
+	DELETE  method = "DELETE"
+	OPTIONS method = "OPTIONS"
 )
 
 type API struct {
