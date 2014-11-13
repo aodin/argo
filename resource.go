@@ -11,6 +11,10 @@ type Modifier interface {
 	Modify(*ResourceSQL) error
 }
 
+type Include interface {
+	Query(sql.Connection, sql.Values) error
+}
+
 // ResourceSQL is the internal representation of a REST resource backed by SQL.
 type ResourceSQL struct {
 	Name    string
@@ -20,8 +24,8 @@ type ResourceSQL struct {
 	inserts Columns
 
 	// Includes
-	listIncludes   []ManyElem
-	detailIncludes []ManyElem
+	listIncludes   []Include
+	detailIncludes []Include
 
 	// TODO save pk columns
 	// TODO Unique and foreign keys that must be checked
