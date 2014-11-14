@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	sql "github.com/aodin/aspect"
 )
 
 type method string
@@ -21,6 +23,7 @@ type API struct {
 	prefix    string
 	resources map[string]Rest
 	routes    *node
+	conn      sql.Connection
 }
 
 func (api *API) Prefix() string {
@@ -40,6 +43,8 @@ func (api *API) SetPrefix(prefix string) *API {
 
 // Add adds the SQL resource to the API using its name
 func (api *API) Add(resource *ResourceSQL) error {
+	// Set the connection
+	resource.conn = api.conn
 	// Build the routes from the primary key(s)
 	return api.AddRest(resource.Name, resource, resource.table.PrimaryKey()...)
 }
@@ -162,4 +167,10 @@ func New() *API {
 		resources: make(map[string]Rest),
 		routes:    &node{},
 	}
+}
+
+func NewSQL(conn sql.Connection) *API {
+	api := New()
+	api.conn = conn
+	return api
 }

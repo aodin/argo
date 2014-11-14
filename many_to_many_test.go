@@ -58,13 +58,15 @@ func TestManyToMany(t *testing.T) {
 	defer tx.Rollback()
 	defer conn.Close()
 
-	companies := Resource(tx, FromTable(companyDB))
+	companies := Resource(FromTable(companyDB))
+	companies.conn = tx
 	campuses := Resource(
-		tx,
 		FromTable(campusDB),
 		ManyToMany("companies", companyDB, companyCampusesDB),
 	)
-	companyCampuses := Resource(tx, FromTable(companyCampusesDB))
+	campuses.conn = tx
+	companyCampuses := Resource(FromTable(companyCampusesDB))
+	companyCampuses.conn = tx
 
 	var b []byte
 	var err error
@@ -135,10 +137,10 @@ func TestManyToMany(t *testing.T) {
 
 	// Write a new resource with included and excluded information
 	activity := Resource(
-		tx,
 		FromTable(campusDB),
 		ManyToMany("companies", companyDB, companyCampusesDB).Exclude("name").IncludeThrough("is_active"),
 	)
+	activity.conn = tx
 
 	response, errAPI = activity.Get(mockRequestID(nil, locationID))
 	require.Nil(t, errAPI)

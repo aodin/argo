@@ -105,10 +105,8 @@ func TestSimpleResourceSQL(t *testing.T) {
 	defer conn.Close()
 
 	// Resources must be created with a connection
-	users := Resource(
-		tx,
-		FromTable(usersDB),
-	)
+	users := Resource(FromTable(usersDB))
+	users.conn = tx
 
 	// Since *APIErr implements error, explicitly request an API error
 	var errAPI *APIError
@@ -227,8 +225,10 @@ func TestResource_Post(t *testing.T) {
 	defer tx.Rollback()
 	defer conn.Close()
 
-	users := Resource(tx, FromTable(usersDB))
-	edges := Resource(tx, FromTable(edgesDB))
+	users := Resource(FromTable(usersDB))
+	users.conn = tx
+	edges := Resource(FromTable(edgesDB))
+	edges.conn = tx
 
 	var errAPI *APIError
 

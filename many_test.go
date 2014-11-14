@@ -34,11 +34,10 @@ func TestMany(t *testing.T) {
 	defer tx.Rollback()
 	defer conn.Close()
 
-	companies := Resource(tx,
-		FromTable(companyDB),
-		Many("contacts", contactsDB),
-	)
-	contacts := Resource(tx, FromTable(contactsDB))
+	companies := Resource(FromTable(companyDB), Many("contacts", contactsDB))
+	companies.conn = tx
+	contacts := Resource(FromTable(contactsDB))
+	contacts.conn = tx
 
 	var b []byte
 	var err error
@@ -105,10 +104,10 @@ func TestMany(t *testing.T) {
 
 	// Output the include as a map
 	asMap := Resource(
-		tx,
 		FromTable(companyDB),
 		Many("contacts", contactsDB).AsMap("key", "value"),
 	)
+	asMap.conn = tx
 
 	response, errAPI = asMap.Get(mockRequestID(nil, companyID))
 	require.Nil(t, errAPI)
@@ -121,10 +120,10 @@ func TestMany(t *testing.T) {
 
 	// Detail only
 	detailOnly := Resource(
-		tx,
 		FromTable(companyDB),
 		Many("contacts", contactsDB).DetailOnly(),
 	)
+	detailOnly.conn = tx
 
 	// Detail should still work
 	response, errAPI = detailOnly.Get(mockRequestID(nil, companyID))

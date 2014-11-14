@@ -341,7 +341,7 @@ func InvalidName(name string) error {
 
 // Resource created a new ResourceSQL from the given table and modifiers.
 // Panic on errors.
-func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
+func Resource(t TableElem, fields ...Modifier) *ResourceSQL {
 	name := t.Name
 	if err := InvalidName(name); err != nil {
 		panic(err)
@@ -350,7 +350,6 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 	// Resources are JSON encoded by default
 	resource := &ResourceSQL{
 		Name:    name,
-		conn:    c,
 		table:   t.table, // the parameter table is argo.TableElem
 		selects: t.selects,
 		inserts: ColumnSet(t.table.Columns()...),
