@@ -23,6 +23,7 @@ type ResourceSQL struct {
 	table   *sql.TableElem
 	selects Columns
 	inserts Columns
+	fields  map[string]Validator
 
 	// Includes
 	listIncludes   []Include
@@ -353,6 +354,7 @@ func Resource(c sql.Connection, t TableElem, fields ...Modifier) *ResourceSQL {
 		table:   t.table, // the parameter table is argo.TableElem
 		selects: t.selects,
 		inserts: ColumnSet(t.table.Columns()...),
+		fields:  make(map[string]Validator),
 	}
 
 	// Remove the primary key column(s) from the directly inserted columns
