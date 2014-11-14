@@ -15,6 +15,7 @@ type ManyElem struct {
 	table      *sql.TableElem
 	resource   *ResourceSQL
 	selects    Columns
+	showFK     bool // By default, foreign key fields will be dropped
 	detailOnly bool
 	asMap      *struct {
 		Key   string
@@ -59,6 +60,10 @@ func (elem ManyElem) DetailOnly() ManyElem {
 
 // Exclude removes the given fields by name from the included ManyElem.
 func (elem ManyElem) Exclude(names ...string) ManyElem {
+
+	// TODO The foreign key column cannot be excluded! it is needed for
+	// matching - it can be dropped automatically later
+
 	for _, name := range names {
 		if _, ok := elem.table.C[name]; !ok {
 			panic(fmt.Sprintf(
@@ -154,6 +159,13 @@ func (elem ManyElem) Query(conn sql.Connection, values sql.Values) error {
 		))
 	}
 
+	if !elem.showFK {
+		// TODO multiple fks
+		for _, result := range results {
+			delete(result, elem.fk.Name())
+		}
+	}
+
 	FixValues(results...)
 	if elem.asMap == nil {
 		values[elem.name] = results
@@ -208,11 +220,15 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 	}
 
 	// TODO conditional query toggles
+	// TODO the included fk field must be selected even if it is removed
+	// later - it is needed to match resources
+	// TODO custom order bys
+	// TODO composite primary keys
 	stmt := sql.Select(
 		elem.selects,
 	).Where(
 		elem.table.C[elem.fk.Name()].In(fkValues),
-	)
+	).OrderBy(elem.table.C[elem.table.PrimaryKey()[0]])
 
 	results := make([]sql.Values, 0)
 	if err := c.QueryAll(stmt, &results); err != nil {
@@ -227,9 +243,13 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 	FixValues(results...)
 
 	// Separate them by fk value
-	byFkValue := make(map[interface{}][]interface{})
+	byFkValue := make(map[interface{}][]sql.Values)
 	for _, result := range results {
 		key := result[elem.fk.Name()]
+		if !elem.showFK {
+			// TODO multiple fks
+			delete(result, elem.fk.Name())
+		}
 		byFkValue[key] = append(byFkValue[key], result)
 	}
 
@@ -240,7 +260,7 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 		if ok {
 			value[elem.name] = fkValues
 		} else {
-			value[elem.name] = make([]interface{}, 0) // JSON output as []
+			value[elem.name] = make([]sql.Values, 0) // JSON output as []
 		}
 	}
 	return nil

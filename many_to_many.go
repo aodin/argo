@@ -158,6 +158,68 @@ func (elem ManyToManyElem) Query(c sql.Connection, values sql.Values) error {
 
 // QueryAll is the database query method used for multiple result list methods.
 func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
+	// Get all foreign name values
+	fkValues := make([]interface{}, 0)
+
+	// TODO panic or errors
+	// TODO Query by a value that doesn't exist in values?
+	for _, value := range v {
+		fkValue, ok := value[elem.resourceFK.ForeignName()]
+		if !ok {
+			panic(fmt.Sprintf(
+				"argo: cannot query an included many to many table by a values key '%s' - it does not exist in the given values map",
+				elem.resourceFK.ForeignName(),
+			))
+		}
+		fkValues = append(fkValues, fkValue)
+	}
+
+	// If there are no values to query, stop here
+	if len(fkValues) == 0 {
+		return nil
+	}
+
+	// TODO conditional query toggles
+	stmt := sql.Select(
+		elem.selects,
+	).Join(
+		elem.through.C[elem.resourceFK.Name()],
+		elem.resource.table.C[elem.resourceFK.ForeignName()],
+	).Join(
+		elem.through.C[elem.elementFK.Name()],
+		elem.table.C[elem.elementFK.ForeignName()],
+	).Where(
+		elem.through.C[elem.resourceFK.Name()].In(fkValues),
+	)
+
+	results := make([]sql.Values, 0)
+	if err := c.QueryAll(stmt, &results); err != nil {
+		panic(fmt.Sprintf(
+			"argo: error in query all for many with keys '%v' (%s): %s",
+			fkValues, // TODO pretty print value array?
+			stmt,
+			err,
+		))
+	}
+
+	FixValues(results...)
+
+	// Separate them by fk value
+	byFkValue := make(map[interface{}][]interface{})
+	for _, result := range results {
+		key := result[elem.resourceFK.Name()]
+		byFkValue[key] = append(byFkValue[key], result)
+	}
+
+	// Add them back into the original values array
+	for _, value := range v {
+		fkValues, ok := byFkValue[value[elem.resourceFK.ForeignName()]]
+		if ok {
+			value[elem.name] = fkValues
+		} else {
+			value[elem.name] = make([]interface{}, 0) // JSON output as []
+		}
+	}
 	return nil
 }
 
@@ -172,6 +234,6 @@ func ManyToMany(name string, table, through *sql.TableElem) ManyToManyElem {
 		name:    name,
 		table:   table,
 		through: through,
-		selects: ColumnSet(table.Columns()...), // Include through values?
+		selects: ColumnSet(table.Columns()...), // No include values by default
 	}
 }
