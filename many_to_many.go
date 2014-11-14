@@ -16,6 +16,7 @@ type ManyToManyElem struct {
 	selects    Columns
 }
 
+// Exclude removes fields on the  element table from the query
 func (elem ManyToManyElem) Exclude(names ...string) ManyToManyElem {
 	for _, name := range names {
 		if _, ok := elem.table.C[name]; !ok {
@@ -30,6 +31,31 @@ func (elem ManyToManyElem) Exclude(names ...string) ManyToManyElem {
 			panic(fmt.Sprintf(
 				"argo: the column '%s' cannot be excluded - it either does not exist or has already been excluded",
 				name,
+			))
+		}
+	}
+	return elem
+}
+
+// IncludeThrough adds fields from the through table to the query
+func (elem ManyToManyElem) IncludeThrough(names ...string) ManyToManyElem {
+	for _, name := range names {
+		if _, ok := elem.through.C[name]; !ok {
+			panic(fmt.Sprintf(
+				"argo: cannot exclude '%s' from many to many, through table '%s' does not have a column with this name",
+				name,
+				elem.through.Name,
+			))
+		}
+
+		// TODO for now, there can be no name collision between the fields
+		// on the element table and those on the through table
+		if err := elem.selects.Add(elem.through.C[name]); err != nil {
+			panic(fmt.Sprintf(
+				"argo: cannot add column '%s' from through table '%s' to selects: %s",
+				name,
+				elem.through.Name,
+				err,
 			))
 		}
 	}
