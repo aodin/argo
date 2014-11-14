@@ -14,6 +14,7 @@ type ManyToManyElem struct {
 	through    *sql.TableElem
 	resource   *ResourceSQL
 	selects    Columns
+	showFK     bool // By default, foreign key fields will be dropped
 	detailOnly bool
 }
 
@@ -24,6 +25,10 @@ func (elem ManyToManyElem) DetailOnly() ManyToManyElem {
 
 // Exclude removes fields on the  element table from the query
 func (elem ManyToManyElem) Exclude(names ...string) ManyToManyElem {
+
+	// TODO The foreign key column cannot be excluded! it is needed for
+	// matching - it can be dropped automatically later
+
 	for _, name := range names {
 		if _, ok := elem.table.C[name]; !ok {
 			panic(fmt.Sprintf(
@@ -180,8 +185,13 @@ func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
 	}
 
 	// TODO conditional query toggles
+	// The included through fk field must be selected even if it is removed
+	// later - it is needed to match resources
+	// TODO custom order bys
+	// TODO composite primary keys
 	stmt := sql.Select(
 		elem.selects,
+		elem.through.C[elem.resourceFK.Name()],
 	).Join(
 		elem.through.C[elem.resourceFK.Name()],
 		elem.resource.table.C[elem.resourceFK.ForeignName()],
@@ -190,7 +200,7 @@ func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
 		elem.table.C[elem.elementFK.ForeignName()],
 	).Where(
 		elem.through.C[elem.resourceFK.Name()].In(fkValues),
-	)
+	).OrderBy(elem.table.C[elem.table.PrimaryKey()[0]])
 
 	results := make([]sql.Values, 0)
 	if err := c.QueryAll(stmt, &results); err != nil {
@@ -205,9 +215,13 @@ func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
 	FixValues(results...)
 
 	// Separate them by fk value
-	byFkValue := make(map[interface{}][]interface{})
+	byFkValue := make(map[interface{}][]sql.Values)
 	for _, result := range results {
 		key := result[elem.resourceFK.Name()]
+		if !elem.showFK {
+			// TODO multiple fks
+			delete(result, elem.resourceFK.Name())
+		}
 		byFkValue[key] = append(byFkValue[key], result)
 	}
 
@@ -217,7 +231,7 @@ func (elem ManyToManyElem) QueryAll(c sql.Connection, v []sql.Values) error {
 		if ok {
 			value[elem.name] = fkValues
 		} else {
-			value[elem.name] = make([]interface{}, 0) // JSON output as []
+			value[elem.name] = make([]sql.Values, 0) // JSON output as []
 		}
 	}
 	return nil

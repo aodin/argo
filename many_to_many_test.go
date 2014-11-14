@@ -75,6 +75,11 @@ func TestManyToMany(t *testing.T) {
 
 	// Add a company, campus, and companyCampus
 	// Get the created id from the company and campus
+	b, err = json.Marshal(company{Name: "Fake Company"})
+	require.Nil(t, err)
+	_, errAPI = companies.Post(mockRequest(b))
+	require.Nil(t, errAPI)
+
 	b, err = json.Marshal(company{Name: "Test Company"})
 	require.Nil(t, err)
 	response, errAPI = companies.Post(mockRequest(b))
@@ -110,15 +115,23 @@ func TestManyToMany(t *testing.T) {
 	require.Equal(t, 1, len(multiresults))
 	assert.Equal("Test Campus", multiresults[0]["name"])
 
+	// Companies should be a list of values
+	companiesValues := multiresults[0]["companies"].([]sql.Values)
+	assert.Equal(1, len(companiesValues))
+	assert.Equal(companyID, companiesValues[0]["id"])
+	assert.Equal("Test Company", companiesValues[0]["name"])
+	assert.Nil(companiesValues[0]["campus_id"])
+
 	response, errAPI = campuses.Get(mockRequestID(nil, campusID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	assert.Equal("Test Campus", values["name"])
 
-	companiesValues := values["companies"].([]sql.Values)
+	companiesValues = values["companies"].([]sql.Values)
 	require.Equal(t, 1, len(companiesValues))
 	assert.Equal(companyID, companiesValues[0]["id"])
 	assert.Equal("Test Company", companiesValues[0]["name"])
+	assert.Nil(companiesValues[0]["campus_id"])
 
 	// Write a new resource with included and excluded information
 	activity := Resource(

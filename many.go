@@ -219,10 +219,10 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 		return nil
 	}
 
-	// TODO conditional query toggles
-	// TODO the included fk field must be selected even if it is removed
+	// The included fk field must be selected even if it is removed
 	// later - it is needed to match resources
 	// TODO custom order bys
+	// TODO conditional query toggles
 	// TODO composite primary keys
 	stmt := sql.Select(
 		elem.selects,
