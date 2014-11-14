@@ -6,19 +6,26 @@ import (
 	sql "github.com/aodin/aspect"
 )
 
+// ManyElem is the internal representation of an included Many resource.
+// The included table must be connected by a Foreign key to the parent
+// resource table.
 type ManyElem struct {
-	name     string // name where values will be added to parent table
-	fk       sql.ForeignKeyElem
-	table    *sql.TableElem
-	resource *ResourceSQL
-	selects  Columns
-	asMap    *struct {
+	name       string // name where values will be added to parent table
+	fk         sql.ForeignKeyElem
+	table      *sql.TableElem
+	resource   *ResourceSQL
+	selects    Columns
+	detailOnly bool
+	asMap      *struct {
 		Key   string
 		Value string
 	}
 }
 
+// AsMap converts the list of many elements into a map of the given key: value.
 func (elem ManyElem) AsMap(key, value string) ManyElem {
+	// TODO How to guarantee that the key is unique per result?
+
 	// Both key and value must be selectable columns
 	if !elem.selects.Has(key) {
 		panic(fmt.Sprintf(
@@ -44,6 +51,13 @@ func (elem ManyElem) AsMap(key, value string) ManyElem {
 	return elem
 }
 
+// DetailOnly will attach the ManyElem to only the detail views of the API.
+func (elem ManyElem) DetailOnly() ManyElem {
+	elem.detailOnly = true
+	return elem
+}
+
+// Exclude removes the given fields by name from the included ManyElem.
 func (elem ManyElem) Exclude(names ...string) ManyElem {
 	for _, name := range names {
 		if _, ok := elem.table.C[name]; !ok {
@@ -64,6 +78,9 @@ func (elem ManyElem) Exclude(names ...string) ManyElem {
 	return elem
 }
 
+// Modify implements the Modifier resource that allows an element to
+// modify a resource. It will add the ManyElem to the list of included
+// elements for the given resource.
 func (elem ManyElem) Modify(resource *ResourceSQL) error {
 	if resource.table == nil {
 		return fmt.Errorf("argo: Many statements can only modify resources with an existing table")
@@ -101,10 +118,11 @@ func (elem ManyElem) Modify(resource *ResourceSQL) error {
 	// TODO Create a common field struct, with validation / create?
 
 	// Add the included table to the requested methods
-	// TODO the methods the include is added to
+	// TODO specify the HTTP methods were the include should be active
 	resource.detailIncludes = append(resource.detailIncludes, elem)
-	resource.listIncludes = append(resource.listIncludes, elem)
-
+	if !elem.detailOnly {
+		resource.listIncludes = append(resource.listIncludes, elem)
+	}
 	return nil
 }
 
@@ -228,6 +246,7 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 	return nil
 }
 
+// Many creates a new Many respresentation of the given table at the given name
 func Many(name string, table *sql.TableElem) ManyElem {
 	if table == nil {
 		panic("argo: tables in many statements cannot be nil")

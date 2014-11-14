@@ -65,6 +65,7 @@ func TestMany(t *testing.T) {
 	_, errAPI = contacts.Post(mockRequest(b))
 	require.Nil(t, errAPI)
 
+	// Get the companies resource with the many contacts included
 	response, errAPI = companies.Get(mockRequestID(nil, companyID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
@@ -92,11 +93,23 @@ func TestMany(t *testing.T) {
 	require.Equal(t, 1, len(contactsMap))
 	assert.Equal("whatever", contactsMap["faceagram"])
 
-	// TODO detail only
+	// Detail only
+	detailOnly := Resource(
+		tx,
+		FromTable(companyDB),
+		Many("contacts", contactsDB).DetailOnly(),
+	)
 
-	// detailOnly := Resource(
-	// 	tx,
-	// 	FromTable(campusDB),
-	// 	Many("contacts", contactsDB).AsMap(),
-	// )
+	// Detail should still work
+	response, errAPI = detailOnly.Get(mockRequestID(nil, companyID))
+	require.Nil(t, errAPI)
+	contactsValues = response.(sql.Values)["contacts"].([]sql.Values)
+	require.Equal(t, 1, len(contactsValues))
+
+	// But not List
+	response, errAPI = detailOnly.List(mockRequest(nil))
+	require.Nil(t, errAPI)
+	multiresults := response.(MultiResponse).Results.([]sql.Values)
+	require.Equal(t, 1, len(multiresults))
+	assert.Nil(multiresults[0]["contacts"])
 }

@@ -85,7 +85,7 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 	FixValues(results...)
 
 	// Add the includes
-	for _, include := range c.detailIncludes {
+	for _, include := range c.listIncludes {
 		if dbErr := include.QueryAll(c.conn, results); dbErr != nil {
 			panic(fmt.Sprintf(
 				"argo: could not query all includes in sql resource list (%s): %s",

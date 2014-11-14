@@ -14,6 +14,12 @@ type ManyToManyElem struct {
 	through    *sql.TableElem
 	resource   *ResourceSQL
 	selects    Columns
+	detailOnly bool
+}
+
+func (elem ManyToManyElem) DetailOnly() ManyToManyElem {
+	elem.detailOnly = true
+	return elem
 }
 
 // Exclude removes fields on the  element table from the query
@@ -99,10 +105,12 @@ func (elem ManyToManyElem) Modify(resource *ResourceSQL) error {
 	elem.resource = resource
 
 	// TODO Create a common field struct, with validation / create?
-	// Add the included table to the requested methods
-	// TODO detail only for now
-	resource.detailIncludes = append(resource.detailIncludes, elem)
 
+	// TODO Add the included table to the requested methods
+	resource.detailIncludes = append(resource.detailIncludes, elem)
+	if !elem.detailOnly {
+		resource.listIncludes = append(resource.listIncludes, elem)
+	}
 	return nil
 }
 
