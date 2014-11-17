@@ -173,26 +173,27 @@ func (elem ManyElem) Query(conn sql.Connection, values sql.Values) error {
 	}
 
 	// Convert to a map
-	key := elem.asMap.Key
-	value := elem.asMap.Value
+	values[elem.name] = valuesToMap(results, elem.asMap.Key, elem.asMap.Value)
+	return nil
+}
 
-	// All key results must be of type string
-	// TODO if not unique allow mapping as map[string][]interface{}
+// TODO if not unique allow mapping as map[string][]interface{}
+func valuesToMap(results []sql.Values, k, v string) map[string]interface{} {
 	mapping := make(map[string]interface{})
 	for _, result := range results {
-		keyValue, ok := result[key].(string)
+		// All key results must be of type string
+		keyValue, ok := result[k].(string)
 		if !ok {
-			return fmt.Errorf(
+			panic(fmt.Errorf(
 				"argo: cannot create mapping using key '%s' - it is non-string type %T",
-				key,
+				k,
 				keyValue,
-			)
+			))
 		}
 		// TODO error for non-unique?
-		mapping[keyValue] = result[value]
+		mapping[keyValue] = result[v]
 	}
-	values[elem.name] = mapping
-	return nil
+	return mapping
 }
 
 // QueryAll is the database query method used for building a many
@@ -258,7 +259,15 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 	for _, value := range values {
 		fkValues, ok := byFkValue[value[elem.fk.ForeignName()]]
 		if ok {
-			value[elem.name] = fkValues
+			if elem.asMap == nil {
+				value[elem.name] = fkValues
+			} else {
+				value[elem.name] = valuesToMap(
+					fkValues,
+					elem.asMap.Key,
+					elem.asMap.Value,
+				)
+			}
 		} else {
 			value[elem.name] = make([]sql.Values, 0) // JSON output as []
 		}
