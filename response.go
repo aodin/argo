@@ -1,12 +1,15 @@
 package argo
 
-import ()
+import (
+	sql "github.com/aodin/aspect"
+)
 
 type Response interface{}
 
 type Meta struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+	order  []sql.Orderable `json:"-"`
 }
 
 type MultiResponse struct {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -59,6 +60,7 @@ func mockRequest(body []byte) *Request {
 		Request:  &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
 		Encoding: JSON{},
 		Decoding: JSON{},
+		Values:   url.Values{},
 	}
 }
 
@@ -69,6 +71,7 @@ func mockRequestID(body []byte, id interface{}) *Request {
 		},
 		Encoding: JSON{},
 		Decoding: JSON{},
+		Values:   url.Values{},
 		Params:   Params{{Key: "id", Value: fmt.Sprintf("%d", id)}},
 	}
 }
@@ -98,6 +101,39 @@ func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, sql.Transacti
 	return conn, tx
 }
 
+func TestParseOrder(t *testing.T) {
+	assert := assert.New(t)
+
+	users := Resource(FromTable(usersDB))
+
+	assert.Equal(
+		[]sql.Orderable(nil),
+		users.parseOrder(""),
+	)
+	assert.Equal(
+		[]sql.Orderable{usersDB.C["id"].Asc()},
+		users.parseOrder("id"),
+	)
+	assert.Equal(
+		[]sql.Orderable{usersDB.C["id"].Desc()},
+		users.parseOrder("-id"),
+	)
+	assert.Equal(
+		[]sql.Orderable{usersDB.C["name"].Asc(), usersDB.C["id"].Desc()},
+		users.parseOrder("name,-id"),
+	)
+
+	// Malformed input
+	assert.Equal(
+		[]sql.Orderable(nil),
+		users.parseOrder(",,,,"),
+	)
+	assert.Equal(
+		[]sql.Orderable(nil),
+		users.parseOrder(",,what,,"),
+	)
+}
+
 func TestSimpleResourceSQL(t *testing.T) {
 	assert := assert.New(t)
 	conn, tx := initSchemas(t, usersDB)
@@ -112,7 +148,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 	var errAPI *APIError
 
 	// Get the empty list
-	response, errAPI := users.List(&Request{})
+	response, errAPI := users.List(mockRequest(nil))
 	assert.Nil(errAPI)
 	multiResponse, ok := response.(MultiResponse)
 	require.Equal(t, true, ok)

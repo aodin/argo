@@ -269,7 +269,11 @@ func (elem ManyElem) QueryAll(c sql.Connection, values []sql.Values) error {
 				)
 			}
 		} else {
-			value[elem.name] = make([]sql.Values, 0) // JSON output as []
+			if elem.asMap == nil {
+				value[elem.name] = make([]sql.Values, 0) // JSON output as []
+			} else {
+				value[elem.name] = sql.Values{}
+			}
 		}
 	}
 	return nil

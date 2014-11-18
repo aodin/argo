@@ -2,6 +2,8 @@ package argo
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	sql "github.com/aodin/aspect"
 	"github.com/aodin/aspect/postgres"
@@ -29,8 +31,64 @@ type ResourceSQL struct {
 	listIncludes   []Include
 	detailIncludes []Include
 
+	// Default values
+	limit  int
+	offset int
+	order  []sql.Orderable // Default ordering is the pks ascending
+
 	// TODO save pk columns
 	// TODO Unique and foreign keys that must be checked
+}
+
+// parseMeta parses the GET variables of the request and creates a Meta object
+// that can be directly added to the response. It will return defaults for the
+// collection when the requested values are unsafe.
+func (c *ResourceSQL) parseMeta(r *Request) (meta Meta) {
+	var err error
+
+	// TODO there should be limit max
+	meta.Limit, err = strconv.Atoi(r.Get("limit"))
+	if err != nil || meta.Limit < 1 {
+		meta.Limit = c.limit
+	}
+	meta.Offset, err = strconv.Atoi(r.Get("offset"))
+	if err != nil || meta.Offset < 0 {
+		meta.Offset = c.offset
+	}
+
+	meta.order = c.parseOrder(r.Get("order"))
+	if len(meta.order) < 1 {
+		// Fallback to default (primary keys ascending)
+		meta.order = c.order
+	}
+	return
+}
+
+// parseOrder: field names are separated by commas, descending is
+// marked by hyphens.
+// TODO Sean hates this.
+func (c *ResourceSQL) parseOrder(get string) (order []sql.Orderable) {
+	parts := strings.Split(get, ",")
+	for _, part := range parts {
+		var desc bool
+		// TODO error on bad columns / format
+		if part != "" && part[0] == '-' {
+			desc = true
+			part = part[1:]
+		}
+
+		// TODO columns can't start with a hyphen
+		column, exists := c.table.C[part]
+		if !exists {
+			continue
+		}
+		if desc {
+			order = append(order, column.Desc())
+		} else {
+			order = append(order, column.Asc())
+		}
+	}
+	return
 }
 
 func (c *ResourceSQL) Validate(values sql.Values) *APIError {
@@ -72,8 +130,14 @@ func (c *ResourceSQL) HasRequired(values sql.Values) *APIError {
 	return nil
 }
 
+// List returns the collection view of this sql resource.
 func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
-	stmt := sql.Select(c.selects)
+	// Parse meta information for limit, offset, and order
+	meta := c.parseMeta(r)
+	stmt := sql.Select(
+		c.selects,
+	).OrderBy(meta.order...).Offset(meta.Offset).Limit(meta.Limit)
+
 	results := make([]sql.Values, 0)
 	if err := c.conn.QueryAll(stmt, &results); err != nil {
 		panic(fmt.Sprintf(
@@ -94,7 +158,7 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 		}
 	}
 
-	return MultiResponse{Results: results}, nil
+	return MultiResponse{Meta: meta, Results: results}, nil
 }
 
 func (c *ResourceSQL) Post(r *Request) (Response, *APIError) {
@@ -354,6 +418,9 @@ func Resource(t TableElem, fields ...Modifier) *ResourceSQL {
 		selects: t.selects,
 		inserts: ColumnSet(t.table.Columns()...),
 		fields:  make(map[string]Validator),
+
+		// Default values - TODO how to set max?
+		limit: 10000,
 	}
 
 	// Remove the primary key column(s) from the directly inserted columns
@@ -362,7 +429,12 @@ func Resource(t TableElem, fields ...Modifier) *ResourceSQL {
 		if err := resource.inserts.Remove(pk); err != nil {
 			panic(err)
 		}
+
+		// Construct the default ordering from the primary keys
+		resource.order = append(resource.order, t.table.C[pk].Asc())
 	}
+
+	// TODO Make sure the table has no keywords, e.g. order, limit, offset
 
 	for _, field := range fields {
 		if err := field.Modify(resource); err != nil {
