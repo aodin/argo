@@ -7,9 +7,10 @@ import (
 type Response interface{}
 
 type Meta struct {
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
-	order  []sql.Orderable `json:"-"`
+	Limit   int             `json:"limit"`
+	Offset  int             `json:"offset"`
+	order   []sql.Orderable `json:"-"`
+	filters []sql.Clause    `json:"-"`
 }
 
 type MultiResponse struct {

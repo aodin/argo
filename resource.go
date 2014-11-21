@@ -32,9 +32,10 @@ type ResourceSQL struct {
 	detailIncludes []Include
 
 	// Default values
-	limit  int
-	offset int
-	order  []sql.Orderable // Default ordering is the pks ascending
+	limit   int
+	offset  int
+	order   []sql.Orderable // Default ordering is the pks ascending
+	filters map[string]Filter
 
 	// TODO save pk columns
 	// TODO Unique and foreign keys that must be checked
@@ -46,14 +47,27 @@ type ResourceSQL struct {
 func (c *ResourceSQL) parseMeta(r *Request) (meta Meta) {
 	var err error
 
+	// Get all request parameters
+	values := r.QueryValues()
+
 	// TODO there should be limit max
-	meta.Limit, err = strconv.Atoi(r.Get("limit"))
+	meta.Limit, err = strconv.Atoi(values.Get("limit"))
 	if err != nil || meta.Limit < 1 {
 		meta.Limit = c.limit
 	}
+
+	var ok bool
+	if _, ok = values["limit"]; ok {
+		delete(values, "limit")
+	}
+
 	meta.Offset, err = strconv.Atoi(r.Get("offset"))
 	if err != nil || meta.Offset < 0 {
 		meta.Offset = c.offset
+	}
+
+	if _, ok = values["offset"]; ok {
+		delete(values, "offset")
 	}
 
 	meta.order = c.parseOrder(r.Get("order"))
@@ -61,6 +75,29 @@ func (c *ResourceSQL) parseMeta(r *Request) (meta Meta) {
 		// Fallback to default (primary keys ascending)
 		meta.order = c.order
 	}
+
+	if _, ok = values["order"]; ok {
+		delete(values, "order")
+	}
+
+	// Perform default filtering on the remaining fields
+	for k, _ := range values {
+		// The values of query values are slices, just get the first
+		v := values.Get(k)
+		if v == "" {
+			continue
+		}
+
+		// If this is a filtering selection, add it to the meta filters
+		var filter Filter
+		if filter, ok = c.filters[k]; !ok {
+			continue
+		}
+		meta.filters = append(meta.filters, filter.Filter(v))
+	}
+
+	// TODO foreign key matching?
+
 	return
 }
 
@@ -137,6 +174,10 @@ func (c *ResourceSQL) List(r *Request) (Response, *APIError) {
 	stmt := sql.Select(
 		c.selects,
 	).OrderBy(meta.order...).Offset(meta.Offset).Limit(meta.Limit)
+
+	if len(meta.filters) > 0 {
+		stmt = stmt.Where(sql.AllOf(meta.filters...))
+	}
 
 	results := make([]sql.Values, 0)
 	if err := c.conn.QueryAll(stmt, &results); err != nil {
@@ -420,7 +461,21 @@ func Resource(t TableElem, fields ...Modifier) *ResourceSQL {
 		fields:  make(map[string]Validator),
 
 		// Default values - TODO how to set max?
-		limit: 10000,
+		limit:   10000,
+		filters: make(map[string]Filter),
+	}
+
+	// Set the default filters using the selectable columns
+	for _, column := range t.selects {
+		// TODO These clauses should not be hardcoded - but some kind
+		// of "comparable" interface
+		// For now, the actual filter will just modify the Post field
+		switch column.Type().(type) {
+		case sql.String:
+			resource.filters[column.Name()] = StringFilter{column: column}
+		default:
+			resource.filters[column.Name()] = EqualsFilter{column: column}
+		}
 	}
 
 	// Remove the primary key column(s) from the directly inserted columns

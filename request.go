@@ -39,9 +39,12 @@ func (r *Request) Decode(data io.Reader) (sql.Values, *APIError) {
 
 // Get gets a GET parameter and ONLY a get parameter - never POST form data
 func (r *Request) Get(key string) string {
-	if r.Values != nil {
-		return r.Values.Get(key)
+	return r.QueryValues().Get(key)
+}
+
+func (r *Request) QueryValues() url.Values {
+	if r.Values == nil {
+		r.Values = r.Request.URL.Query()
 	}
-	r.Values = r.Request.URL.Query()
-	return r.Values.Get(key)
+	return r.Values
 }

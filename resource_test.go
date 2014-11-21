@@ -76,6 +76,18 @@ func mockRequestID(body []byte, id interface{}) *Request {
 	}
 }
 
+func mockValuesRequest(body []byte, v url.Values) *Request {
+	if v == nil {
+		v = url.Values{}
+	}
+	return &Request{
+		Request:  &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
+		Encoding: JSON{},
+		Decoding: JSON{},
+		Values:   v,
+	}
+}
+
 func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, sql.Transaction) {
 	// Connect to the database specified in the test db.json config
 	// Default to the Travis CI settings if no file is found
@@ -131,6 +143,46 @@ func TestParseOrder(t *testing.T) {
 	assert.Equal(
 		[]sql.Orderable(nil),
 		users.parseOrder(",,what,,"),
+	)
+}
+
+func TestParseMeta(t *testing.T) {
+	assert := assert.New(t)
+
+	users := Resource(FromTable(usersDB))
+
+	// Test with no url Values
+	mock := mockValuesRequest(nil, nil)
+	meta := users.parseMeta(mock)
+
+	assert.Equal(meta.Limit, 10000)
+
+	// With a different limit and offset
+	mock = mockValuesRequest(nil, url.Values{
+		"offset": []string{"1"},
+		"limit":  []string{"1"},
+	})
+	meta = users.parseMeta(mock)
+	assert.Equal(meta.Limit, 1)
+	assert.Equal(meta.Offset, 1)
+
+	// Add a filter
+	mock = mockValuesRequest(nil, url.Values{
+		"is_active": []string{"true"},
+	})
+	meta = users.parseMeta(mock)
+	assert.Equal(
+		[]sql.Clause{usersDB.C["is_active"].Equals("true")},
+		meta.filters,
+	)
+
+	mock = mockValuesRequest(nil, url.Values{
+		"name": []string{"g"},
+	})
+	meta = users.parseMeta(mock)
+	assert.Equal(
+		[]sql.Clause{usersDB.C["name"].ILike(`%g%`)},
+		meta.filters,
 	)
 }
 
