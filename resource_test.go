@@ -1,10 +1,7 @@
 package argo
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -46,47 +43,6 @@ var edgesDB = sql.Table("edges",
 	sql.PrimaryKey("id"),
 	sql.Unique("a", "b"),
 )
-
-type ClosingBuffer struct {
-	*bytes.Buffer
-}
-
-func (cb ClosingBuffer) Close() (err error) {
-	return
-}
-
-func mockRequest(body []byte) *Request {
-	return &Request{
-		Request:  &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
-		Encoding: JSON{},
-		Decoding: JSON{},
-		Values:   url.Values{},
-	}
-}
-
-func mockRequestID(body []byte, id interface{}) *Request {
-	return &Request{
-		Request: &http.Request{
-			Body: ClosingBuffer{bytes.NewBuffer(body)},
-		},
-		Encoding: JSON{},
-		Decoding: JSON{},
-		Values:   url.Values{},
-		Params:   Params{{Key: "id", Value: fmt.Sprintf("%d", id)}},
-	}
-}
-
-func mockValuesRequest(body []byte, v url.Values) *Request {
-	if v == nil {
-		v = url.Values{}
-	}
-	return &Request{
-		Request:  &http.Request{Body: ClosingBuffer{bytes.NewBuffer(body)}},
-		Encoding: JSON{},
-		Decoding: JSON{},
-		Values:   v,
-	}
-}
 
 func initSchemas(t *testing.T, tables ...*sql.TableElem) (*sql.DB, sql.Transaction) {
 	// Connect to the database specified in the test db.json config
@@ -152,13 +108,13 @@ func TestParseMeta(t *testing.T) {
 	users := Resource(FromTable(usersDB))
 
 	// Test with no url Values
-	mock := mockValuesRequest(nil, nil)
+	mock := MockRequest(nil, nil)
 	meta := users.parseMeta(mock)
 
 	assert.Equal(meta.Limit, 10000)
 
 	// With a different limit and offset
-	mock = mockValuesRequest(nil, url.Values{
+	mock = MockRequest(nil, url.Values{
 		"offset": []string{"1"},
 		"limit":  []string{"1"},
 	})
@@ -167,7 +123,7 @@ func TestParseMeta(t *testing.T) {
 	assert.Equal(meta.Offset, 1)
 
 	// Add a filter
-	mock = mockValuesRequest(nil, url.Values{
+	mock = MockRequest(nil, url.Values{
 		"is_active": []string{"true"},
 	})
 	meta = users.parseMeta(mock)
@@ -176,7 +132,7 @@ func TestParseMeta(t *testing.T) {
 		meta.filters,
 	)
 
-	mock = mockValuesRequest(nil, url.Values{
+	mock = MockRequest(nil, url.Values{
 		"name": []string{"g"},
 	})
 	meta = users.parseMeta(mock)
@@ -200,7 +156,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 	var errAPI *APIError
 
 	// Get the empty list
-	response, errAPI := users.List(mockRequest(nil))
+	response, errAPI := users.List(MockRequest(nil, nil))
 	assert.Nil(errAPI)
 	multiResponse, ok := response.(MultiResponse)
 	require.Equal(t, true, ok)
@@ -215,7 +171,7 @@ func TestSimpleResourceSQL(t *testing.T) {
 	b, err := json.Marshal(admin)
 	require.Nil(t, err)
 
-	response, errAPI = users.Post(mockRequest(b))
+	response, errAPI = users.Post(MockRequest(b, nil))
 	assert.Nil(errAPI)
 	result, ok := response.(sql.Values)
 	require.Equal(t, true, ok)
@@ -228,44 +184,44 @@ func TestSimpleResourceSQL(t *testing.T) {
 
 	// GET - valid
 	uid := result["id"].(int64)
-	response, errAPI = users.Get(mockRequestID(nil, uid))
+	response, errAPI = users.Get(MockRequest(nil, nil, uid))
 	assert.Nil(errAPI)
 	result, ok = response.(sql.Values)
 	require.Equal(t, true, ok)
 	assert.Equal(uid, result["id"])
 
 	// GET - missing id
-	response, errAPI = users.Get(mockRequestID(nil, 0))
+	response, errAPI = users.Get(MockRequest(nil, nil, 0))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(404, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
 
 	// GET - invalid id
-	response, errAPI = users.Get(mockRequestID(nil, "whatever"))
+	response, errAPI = users.Get(MockRequest(nil, nil, "whatever"))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["id"])
 
 	// PATCH - missing id (data must be valid)
-	response, errAPI = users.Patch(mockRequestID([]byte(`{"name":"Q"}`), 0))
+	response, errAPI = users.Patch(MockRequest([]byte(`{"name":"Q"}`), nil, 0))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(404, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
 
 	// PATCH - invalid id
-	response, errAPI = users.Patch(mockRequestID(nil, "whatever"))
+	response, errAPI = users.Patch(MockRequest(nil, nil, "whatever"))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["id"])
 
 	// PATCH - malformed JSON
-	_, errAPI = users.Patch(mockRequestID([]byte(`{fsfds`), uid))
+	_, errAPI = users.Patch(MockRequest([]byte(`{fsfds`), nil, uid))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
 
 	// PATCH - extra fields
-	_, errAPI = users.Patch(mockRequestID([]byte(`{"extra":"yup"}`), uid))
+	_, errAPI = users.Patch(MockRequest([]byte(`{"extra":"yup"}`), nil, uid))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["extra"])
@@ -273,13 +229,13 @@ func TestSimpleResourceSQL(t *testing.T) {
 	// TODO PATCH - duplicates
 
 	// PATCH - id
-	_, errAPI = users.Patch(mockRequestID([]byte(`{"id":"3"}`), uid))
+	_, errAPI = users.Patch(MockRequest([]byte(`{"id":"3"}`), nil, uid))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["id"])
 
 	// PATCH - valid
-	response, errAPI = users.Patch(mockRequestID([]byte(`{"name":"Q"}`), uid))
+	response, errAPI = users.Patch(MockRequest([]byte(`{"name":"Q"}`), nil, uid))
 	assert.Nil(errAPI)
 	result, ok = response.(sql.Values)
 	require.Equal(t, true, ok)
@@ -290,19 +246,19 @@ func TestSimpleResourceSQL(t *testing.T) {
 	assert.Equal(admin.Password, result["password"])
 
 	// DELETE - invalid id
-	response, errAPI = users.Delete(mockRequestID(nil, "whatever"))
+	response, errAPI = users.Delete(MockRequest(nil, nil, "whatever"))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["id"])
 
 	// DELETE - missing id
-	response, errAPI = users.Delete(mockRequestID(nil, 0))
+	response, errAPI = users.Delete(MockRequest(nil, nil, 0))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(404, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
 
 	// DELETE - valid id
-	response, errAPI = users.Delete(mockRequestID(nil, uid))
+	response, errAPI = users.Delete(MockRequest(nil, nil, uid))
 	assert.Nil(errAPI)
 	assert.Nil(response)
 }
@@ -321,7 +277,7 @@ func TestResource_Post(t *testing.T) {
 	var errAPI *APIError
 
 	// POST without all required fields
-	_, errAPI = users.Post(mockRequest([]byte(`{}`)))
+	_, errAPI = users.Post(MockRequest([]byte(`{}`), nil))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 
@@ -333,18 +289,18 @@ func TestResource_Post(t *testing.T) {
 	// POST - include primary key
 	b, err := json.Marshal(user{ID: 2, Name: "client"})
 	require.Nil(t, err)
-	_, errAPI = users.Post(mockRequest(b))
+	_, errAPI = users.Post(MockRequest(b, nil))
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["id"])
 
 	// POST - malformed json
-	_, errAPI = users.Post(mockRequest([]byte(`{fsfds`)))
+	_, errAPI = users.Post(MockRequest([]byte(`{fsfds`), nil))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
 
 	// POST - extra fields
-	_, errAPI = users.Post(mockRequest([]byte(`{"extra":"yup"}`)))
+	_, errAPI = users.Post(MockRequest([]byte(`{"extra":"yup"}`), nil))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.NotNil(errAPI.Fields["extra"])
@@ -353,11 +309,11 @@ func TestResource_Post(t *testing.T) {
 	b, err = json.Marshal(user{Name: "admin", Password: "secret"})
 	require.Nil(t, err)
 
-	_, errAPI = users.Post(mockRequest(b))
+	_, errAPI = users.Post(MockRequest(b, nil))
 	assert.Nil(errAPI)
 
 	// POST a duplicate name
-	_, errAPI = users.Post(mockRequest(b))
+	_, errAPI = users.Post(MockRequest(b, nil))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))
@@ -365,10 +321,10 @@ func TestResource_Post(t *testing.T) {
 	// Check uniqueness of composite constraints
 	b, err = json.Marshal(edge{A: 2, B: 3})
 	require.Nil(t, err)
-	_, errAPI = edges.Post(mockRequest(b))
+	_, errAPI = edges.Post(MockRequest(b, nil))
 	assert.Nil(errAPI)
 
-	_, errAPI = edges.Post(mockRequest(b))
+	_, errAPI = edges.Post(MockRequest(b, nil))
 	assert.Equal(true, errAPI.Exists())
 	assert.Equal(400, errAPI.code)
 	assert.Equal(1, len(errAPI.Meta))

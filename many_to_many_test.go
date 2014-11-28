@@ -79,12 +79,12 @@ func TestManyToMany(t *testing.T) {
 	// Get the created id from the company and campus
 	b, err = json.Marshal(company{Name: "Fake Company"})
 	require.Nil(t, err)
-	_, errAPI = companies.Post(mockRequest(b))
+	_, errAPI = companies.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 
 	b, err = json.Marshal(company{Name: "Test Company"})
 	require.Nil(t, err)
-	response, errAPI = companies.Post(mockRequest(b))
+	response, errAPI = companies.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	companyID := values["id"].(int64)
@@ -92,7 +92,7 @@ func TestManyToMany(t *testing.T) {
 
 	b, err = json.Marshal(campus{Name: "Test Campus"})
 	require.Nil(t, err)
-	response, errAPI = campuses.Post(mockRequest(b))
+	response, errAPI = campuses.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	campusID := values["id"].(int64)
@@ -104,14 +104,14 @@ func TestManyToMany(t *testing.T) {
 		IsActive:  true,
 	})
 	require.Nil(t, err)
-	response, errAPI = companyCampuses.Post(mockRequest(b))
+	response, errAPI = companyCampuses.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	locationID := values["id"].(int64)
 	assert.Equal(true, locationID > 0)
 
 	// Get list and detail responses
-	response, errAPI = campuses.List(mockRequest(nil))
+	response, errAPI = campuses.List(MockRequest(nil, nil))
 	require.Nil(t, errAPI)
 	multiresults = response.(MultiResponse).Results.([]sql.Values)
 	require.Equal(t, 1, len(multiresults))
@@ -124,7 +124,7 @@ func TestManyToMany(t *testing.T) {
 	assert.Equal("Test Company", companiesValues[0]["name"])
 	assert.Nil(companiesValues[0]["campus_id"])
 
-	response, errAPI = campuses.Get(mockRequestID(nil, campusID))
+	response, errAPI = campuses.Get(MockRequest(nil, nil, campusID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	assert.Equal("Test Campus", values["name"])
@@ -142,7 +142,7 @@ func TestManyToMany(t *testing.T) {
 	)
 	activity.conn = tx
 
-	response, errAPI = activity.Get(mockRequestID(nil, locationID))
+	response, errAPI = activity.Get(MockRequest(nil, nil, locationID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	assert.Equal("Test Campus", values["name"])

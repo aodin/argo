@@ -50,7 +50,7 @@ func TestMany(t *testing.T) {
 	// Get the created id from the company
 	b, err = json.Marshal(company{Name: "Test Company"})
 	require.Nil(t, err)
-	response, errAPI = companies.Post(mockRequest(b))
+	response, errAPI = companies.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	companyID := values["id"].(int64)
@@ -62,7 +62,7 @@ func TestMany(t *testing.T) {
 		Value:     "whatever",
 	})
 	require.Nil(t, err)
-	_, errAPI = contacts.Post(mockRequest(b))
+	_, errAPI = contacts.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 
 	b, err = json.Marshal(contact{
@@ -71,11 +71,11 @@ func TestMany(t *testing.T) {
 		Value:     "whatever",
 	})
 	require.Nil(t, err)
-	_, errAPI = contacts.Post(mockRequest(b))
+	_, errAPI = contacts.Post(MockRequest(b, nil))
 	require.Nil(t, errAPI)
 
 	// Get the companies resource with the many contacts included
-	response, errAPI = companies.List(mockRequest(nil))
+	response, errAPI = companies.List(MockRequest(nil, nil))
 	require.Nil(t, errAPI)
 	multiresults = response.(MultiResponse).Results.([]sql.Values)
 	require.Equal(t, 1, len(multiresults))
@@ -91,7 +91,7 @@ func TestMany(t *testing.T) {
 
 	// TODO as map in the list view?
 
-	response, errAPI = companies.Get(mockRequestID(nil, companyID))
+	response, errAPI = companies.Get(MockRequest(nil, nil, companyID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	assert.Equal("Test Company", values["name"])
@@ -109,7 +109,7 @@ func TestMany(t *testing.T) {
 	)
 	asMap.conn = tx
 
-	response, errAPI = asMap.Get(mockRequestID(nil, companyID))
+	response, errAPI = asMap.Get(MockRequest(nil, nil, companyID))
 	require.Nil(t, errAPI)
 	values = response.(sql.Values)
 	assert.Equal("Test Company", values["name"])
@@ -126,13 +126,13 @@ func TestMany(t *testing.T) {
 	detailOnly.conn = tx
 
 	// Detail should still work
-	response, errAPI = detailOnly.Get(mockRequestID(nil, companyID))
+	response, errAPI = detailOnly.Get(MockRequest(nil, nil, companyID))
 	require.Nil(t, errAPI)
 	contactsValues = response.(sql.Values)["contacts"].([]sql.Values)
 	require.Equal(t, 2, len(contactsValues))
 
 	// But not List
-	response, errAPI = detailOnly.List(mockRequest(nil))
+	response, errAPI = detailOnly.List(MockRequest(nil, nil))
 	require.Nil(t, errAPI)
 	multiresults = response.(MultiResponse).Results.([]sql.Values)
 	require.Equal(t, 1, len(multiresults))
